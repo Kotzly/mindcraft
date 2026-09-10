@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import path from 'path';
+import { addUsage } from '../utils/usage.js';
 
 const MAX_MIRRORED_TURNS = 200;
 
@@ -133,6 +134,16 @@ export class ClaudeCLI {
                 try {
                     data = JSON.parse(stdout);
                 } catch {}
+                if (data?.usage) {
+                    // total_cost_usd is the API list price; on a subscription it's an estimate, not a bill
+                    addUsage(this, {
+                        input: data.usage.input_tokens,
+                        output: data.usage.output_tokens,
+                        cache_read: data.usage.cache_read_input_tokens,
+                        cache_write: data.usage.cache_creation_input_tokens,
+                        cost_usd: data.total_cost_usd
+                    });
+                }
                 if (data && !data.is_error && typeof data.result === 'string')
                     resolve({ result: data.result });
                 else if (timed_out)

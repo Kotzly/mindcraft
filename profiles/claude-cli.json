@@ -1,7 +1,7 @@
 {
-    "name": "claude",
+    "name": "Haiku",
 
-    "model": "claude-cli/sonnet",
+    "model": "claude-cli/haiku",
     "params": {"effort": "low"},
     "embedding": "ollama"
 }

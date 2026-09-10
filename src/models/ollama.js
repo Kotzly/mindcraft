@@ -1,4 +1,5 @@
 import { strictFormat } from '../utils/text.js';
+import { addUsage } from '../utils/usage.js';
 
 export class Ollama {
     static prefix = 'ollama';
@@ -31,6 +32,7 @@ export class Ollama {
                 });
                 if (apiResponse) {
                     res = apiResponse['message']['content'];
+                    addUsage(this, { input: apiResponse.prompt_eval_count, output: apiResponse.eval_count });
                 } else {
                     res = 'No response data.';
                 }

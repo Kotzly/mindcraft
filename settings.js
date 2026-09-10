@@ -13,7 +13,7 @@ const settings = {
         // "./andy.json",
         // "./profiles/gpt.json",
         // "./profiles/claude.json",
-        "./profiles/claude-cli.json", // uses the local `claude` CLI login instead of an API key
+        // "./profiles/claude-cli.json", // uses the local `claude` CLI login instead of an API key
         // "./profiles/gemini.json",
         // "./profiles/llama.json",
         // "./profiles/qwen.json",
@@ -21,6 +21,8 @@ const settings = {
         // "./profiles/mistral.json",
         // "./profiles/deepseek.json",
         // "./profiles/mercury.json",
+        "./profiles/claude-cli.json",
+        "./profiles/andy-haiku.json",
         // "./profiles/andy-4.json", // Supports up to 75 messages!
 
         // using more than 1 profile requires you to /msg each bot indivually
@@ -40,7 +42,7 @@ const settings = {
 
     "chat_ingame": true, // bot responses are shown in minecraft chat
     "language": "en", // translate to/from this language. Supports these language names: https://cloud.google.com/translate/docs/languages
-    "render_bot_view": false, // show bot's view in browser at localhost:3000, 3001...
+    "render_bot_view": true, // show bot's view in browser at localhost:3000, 3001...
 
     "allow_insecure_coding": true, // allows newAction command and model can write/run code on your computer. enable at own risk
     "allow_vision": false, // allows vision model to interpret screenshots as inputs
