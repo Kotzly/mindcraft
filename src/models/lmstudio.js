@@ -1,5 +1,6 @@
 import OpenAIApi from 'openai';
 import { strictFormat } from '../utils/text.js';
+import { addUsage } from '../utils/usage.js';
 
 export class LMStudio {
     static prefix = 'lmstudio';
@@ -26,6 +27,8 @@ export class LMStudio {
                 ...(this.params || {})
             };
             const completion = await this.openai.chat.completions.create(pack);
+            if (completion.usage)
+                addUsage(this, { input: completion.usage.prompt_tokens, output: completion.usage.completion_tokens });
             if (completion.choices[0].finish_reason === 'length')
                 throw new Error('Context length exceeded');
             console.log('Received.');

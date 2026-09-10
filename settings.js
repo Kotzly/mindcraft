@@ -23,6 +23,9 @@ const settings = {
         // "./profiles/mercury.json",
         "./profiles/claude-cli.json",
         "./profiles/andy-haiku.json",
+        // "./profiles/andy4-haiku.json", // Andy-4 8B (ollama) + haiku for code
+        // "./profiles/andy42air-ollama-haiku.json", // Andy-4.2-Air (ollama) + haiku for code
+        // "./profiles/andy42air-lmstudio-haiku.json", // Andy-4.2-Air (LM Studio server) + haiku for code
         // "./profiles/andy-4.json", // Supports up to 75 messages!
 
         // using more than 1 profile requires you to /msg each bot indivually
