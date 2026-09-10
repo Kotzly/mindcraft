@@ -758,11 +758,21 @@
             return String(n);
         }
 
-        function formatUsage(u) {
-            if (!u.calls) return 'tokens: -';
+        function formatUsageLine(u) {
             const input = u.input_tokens + u.cache_read_tokens + u.cache_write_tokens;
-            let text = `tokens: ${formatTokens(input)} in / ${formatTokens(u.output_tokens)} out · ${u.calls} calls`;
+            let text = `${formatTokens(input)} in / ${formatTokens(u.output_tokens)} out · ${u.calls} calls`;
             if (u.cost_usd !== null) text += ` · ~$${u.cost_usd.toFixed(3)}`;
+            return text;
+        }
+
+        function formatUsage(u) {
+            if (!u.calls && u.cost_usd === null) return 'tokens: -';
+            let text = `tokens: ${formatUsageLine(u)}`;
+            // one line per model when the agent mixes them (e.g. local chat model + Claude for code)
+            if (u.models?.length > 1) {
+                for (const m of u.models)
+                    text += `\n${m.roles.join('+')} (${m.api}/${m.model}): ${formatUsageLine(m)}`;
+            }
             return text;
         }
 
@@ -941,7 +951,7 @@
                             <div class="cell" id="biome-${agent.name}">biome: -</div>
                             <div class="cell" id="items-${agent.name}">inventory slots: -</div>
                             <div class="cell" id="equipped-${agent.name}">equipped: -</div>
-                            <div class="cell" id="usage-${agent.name}" style="grid-column: 1 / -1;">tokens: -</div>
+                            <div class="cell" id="usage-${agent.name}" style="grid-column: 1 / -1; white-space: pre-line;">tokens: -</div>
                             <div class="agent-inventory" id="inventorySection-${agent.name}" style="${invStyle} grid-column: 1 / -1;">
                                 <h3>Inventory</h3>
                                 <div class="cell" id="armor-${agent.name}" style="margin-bottom: 8px;">armor: -</div>

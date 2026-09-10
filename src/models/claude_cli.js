@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import path from 'path';
-import { addUsage } from '../utils/usage.js';
+import { addUsage, createUsage } from '../utils/usage.js';
 
 const MAX_MIRRORED_TURNS = 200;
 
@@ -27,6 +27,8 @@ export class ClaudeCLI {
         this.cwd = path.resolve('bots', '_claude_cli');
         mkdirSync(this.cwd, { recursive: true });
         this.sessions = {};
+        // priced model: the dashboard shows its estimated cost (~$0.000) even before the first call
+        this.usage = createUsage(0);
     }
 
     async sendRequest(turns, systemMessage) {
