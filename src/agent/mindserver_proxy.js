@@ -4,7 +4,7 @@ import { setSettings } from './settings.js';
 import { getFullState } from './library/full_state.js';
 
 // agent's individual connection to the mindserver
-// always connect to localhost
+// connects to the address the mindserver listens on (localhost by default)
 
 class MindServerProxy {
     constructor() {
@@ -18,11 +18,11 @@ class MindServerProxy {
         MindServerProxy.instance = this;
     }
 
-    async connect(name, port) {
+    async connect(name, port, host='localhost') {
         if (this.connected) return;
-        
+
         this.name = name;
-        this.socket = io(`http://localhost:${port}`);
+        this.socket = io(`http://${host}:${port}`);
 
         await new Promise((resolve, reject) => {
             this.socket.on('connect', resolve);

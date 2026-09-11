@@ -7,6 +7,7 @@ let mindserver;
 let connected = false;
 let agent_processes = {};
 let agent_count = 0;
+let mindserver_host = 'localhost';
 let mindserver_port = 8080;
 
 export async function init(host='localhost', port=8080, auto_open_ui=true) {
@@ -15,15 +16,15 @@ export async function init(host='localhost', port=8080, auto_open_ui=true) {
         return;
     }
     mindserver = createMindServer(host, port);
+    // wildcard addresses can't be connected to, reach them via localhost
+    mindserver_host = (host === '0.0.0.0' || host === '::') ? 'localhost' : host;
     mindserver_port = port;
     connected = true;
     if (auto_open_ui) {
         setTimeout(() => {
             // check if browser listener is already open
             if (numStateListeners() === 0) {
-                // wildcard addresses aren't browsable, open them via localhost
-                const ui_host = (host === '0.0.0.0' || host === '::') ? 'localhost' : host;
-                open(`http://${ui_host}:${port}`);
+                open(`http://${mindserver_host}:${port}`);
             }
         }, 3000);
     }
@@ -61,7 +62,7 @@ export async function createAgent(settings) {
             console.warn(`Attempting to connect anyway...`);
         }
 
-        const agentProcess = new AgentProcess(agent_name, mindserver_port);
+        const agentProcess = new AgentProcess(agent_name, mindserver_port, mindserver_host);
         agentProcess.start(load_memory, init_message, agentIndex);
         agent_processes[settings.profile.name] = agentProcess;
     } catch (error) {

@@ -4,7 +4,7 @@ import yargs from 'yargs';
 
 const args = process.argv.slice(2);
 if (args.length < 1) {
-    console.log('Usage: node init_agent.js -n <agent_name> -p <port> -l <load_memory> -m <init_message> -c <count_id>');
+    console.log('Usage: node init_agent.js -n <agent_name> -p <port> --host <host> -l <load_memory> -m <init_message> -c <count_id>');
     process.exit(1);
 }
 
@@ -35,12 +35,17 @@ const argv = yargs(args)
         type: 'number',
         description: 'port of mindserver'
     })
+    .option('host', {
+        type: 'string',
+        default: 'localhost',
+        description: 'host of mindserver'
+    })
     .argv;
 
 (async () => {
     try {
         console.log('Connecting to MindServer');
-        await serverProxy.connect(argv.name, argv.port);
+        await serverProxy.connect(argv.name, argv.port, argv.host);
         console.log('Starting agent');
         const agent = new Agent();
         serverProxy.setAgent(agent);
