@@ -117,8 +117,11 @@ export class ClaudeCLI {
 
     _run(args, prompt, label) {
         console.log(`Awaiting claude-cli response... (model: ${this.model_name || 'default'}, ${label})`);
+        const env = { ...process.env };
+        if (this.params.thinking === false)
+            env.MAX_THINKING_TOKENS = '0'; // the CLI has no --no-thinking flag, only this env var
         return new Promise(resolve => {
-            const child = spawn(this.command, args, { cwd: this.cwd });
+            const child = spawn(this.command, args, { cwd: this.cwd, env });
             let stdout = '', stderr = '', timed_out = false;
             const timer = setTimeout(() => {
                 timed_out = true;

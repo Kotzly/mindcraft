@@ -30,6 +30,16 @@ export class History {
         return JSON.parse(JSON.stringify(this.turns));
     }
 
+    // rough estimate (~4 chars/token) of the live conversation window's size, since most
+    // providers here don't expose a tokenizer; doesn't include the system prompt/docs.
+    estimateTokens() {
+        let chars = this.memory.length;
+        for (const turn of this.turns) {
+            chars += typeof turn.content === 'string' ? turn.content.length : JSON.stringify(turn.content).length;
+        }
+        return Math.round(chars / 4);
+    }
+
     async summarizeMemories(turns) {
         console.log("Storing memories...");
         this.memory = await this.agent.prompter.promptMemSaving(turns);

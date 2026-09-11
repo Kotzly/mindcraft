@@ -45,13 +45,18 @@ export class SelfPrompter {
     async handleLoad(prompt, state) {
         if (state == undefined)
             state = STOPPED;
-        this.state = state;
         this.prompt = prompt;
         if (state !== STOPPED && !prompt)
             throw new Error('No prompt loaded when self-prompting is active');
-        if (state === ACTIVE) {
-            await this.start(prompt);
+        if (state === STOPPED) {
+            this.state = STOPPED;
+            return;
         }
+        // a loaded PAUSED state was waiting on a conversation that doesn't exist anymore
+        // after a restart, so resume the goal loop either way. call start() with no args
+        // so it reuses this.prompt/this.todo instead of treating this as a brand new goal.
+        this.state = ACTIVE;
+        this.start();
     }
 
     setPromptPaused(prompt) {

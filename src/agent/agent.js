@@ -200,10 +200,8 @@ export class Agent {
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
 
+        let resumed = false;
         if (save_data?.self_prompt) {
-            if (init_message) {
-                this.history.add('system', init_message);
-            }
             if (save_data.todo) {
                 this.todo.load(save_data.todo);
                 if (save_data.planned_goal) {
@@ -211,6 +209,7 @@ export class Agent {
                 }
             }
             await this.self_prompter.handleLoad(save_data.self_prompt, save_data.self_prompting_state);
+            resumed = true; // the goal loop drives the bot's next action/message, skip init_message/hello below
         }
         if (save_data?.command_history) {
             this.command_history = save_data.command_history;
@@ -218,6 +217,7 @@ export class Agent {
         if (save_data?.last_sender) {
             this.last_sender = save_data.last_sender;
             if (convoManager.otherAgentInGame(this.last_sender)) {
+                resumed = true;
                 const msg_package = {
                     message: `You have restarted and this message is auto-generated. Continue the conversation with me.`,
                     start: true
@@ -225,11 +225,13 @@ export class Agent {
                 convoManager.receiveFromBot(this.last_sender, msg_package);
             }
         }
-        else if (init_message) {
-            await this.handleMessage('system', init_message, 2);
-        }
-        else {
-            this.openChat("Hello world! I am "+this.name);
+        if (!resumed) {
+            if (init_message) {
+                await this.handleMessage('system', init_message, 2);
+            }
+            else {
+                this.openChat("Hello world! I am "+this.name);
+            }
         }
     }
 

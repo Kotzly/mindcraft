@@ -104,6 +104,7 @@ export function getFullState(agent) {
             summary: bot.modes.getMiniDocs()
         },
         usage: getAgentUsage(agent.prompter),
+        contextTokens: agent.history.estimateTokens(),
         commandHistory: agent.command_history.slice(-15).reverse(),
         todo: {
             items: agent.todo.items,

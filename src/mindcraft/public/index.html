@@ -781,6 +781,11 @@
                         usageEl.title = `input: ${st.usage.input_tokens}\ncache read: ${st.usage.cache_read_tokens}\ncache write: ${st.usage.cache_write_tokens}\noutput: ${st.usage.output_tokens}`
                             + (st.usage.cost_usd !== null ? '\ncost is the API list price (an estimate on a Claude subscription)' : '');
                     }
+                    const contextEl = document.getElementById(`context-${name}`);
+                    if (contextEl && typeof st.contextTokens === 'number') {
+                        contextEl.textContent = `context: ~${formatTokens(st.contextTokens)} tokens`;
+                        contextEl.title = 'Estimated from conversation history length (~4 chars/token). Does not include the system prompt/docs, which add more on top of this.';
+                    }
                     if (st.commandHistory) renderHistory(name, st.commandHistory);
                     if (st.todo) renderTodo(name, st.todo);
                     if (actionEl && st.action) {
@@ -1024,6 +1029,7 @@
                             <div class="cell" id="items-${agent.name}">inventory slots: -</div>
                             <div class="cell" id="equipped-${agent.name}">equipped: -</div>
                             <div class="cell" id="usage-${agent.name}" style="grid-column: 1 / -1; white-space: pre-line;">tokens: -</div>
+                            <div class="cell" id="context-${agent.name}" style="grid-column: 1 / -1;">context: -</div>
                             <div class="agent-inventory" id="inventorySection-${agent.name}" style="${invStyle} grid-column: 1 / -1;">
                                 <h3>Inventory</h3>
                                 <div class="cell" id="armor-${agent.name}" style="margin-bottom: 8px;">armor: -</div>
