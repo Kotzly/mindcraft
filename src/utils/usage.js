@@ -18,9 +18,9 @@ export function addUsage(model, { input = 0, output = 0, cache_read = 0, cache_w
         usage.cost_usd = (usage.cost_usd || 0) + cost_usd;
 }
 
-// Totals over the agent's models plus a per-model breakdown. chat, code, vision and
-// embedding are often the same instance, so each instance is counted once.
-export function getAgentUsage(prompter) {
+// chat, code, vision and embedding are often the same instance, so this groups the
+// prompter's model roles by the (deduplicated) instance they actually point to.
+function groupModelsByRole(prompter) {
     const roles = new Map();
     const by_role = [
         ['chat', prompter.chat_model],
@@ -32,6 +32,12 @@ export function getAgentUsage(prompter) {
         if (model?.usage)
             roles.set(model, [...(roles.get(model) || []), role]);
     }
+    return roles;
+}
+
+// Totals over the agent's models plus a per-model breakdown.
+export function getAgentUsage(prompter) {
+    const roles = groupModelsByRole(prompter);
 
     const total = createUsage();
     total.models = [];
@@ -40,7 +46,32 @@ export function getAgentUsage(prompter) {
             total[key] += model.usage[key];
         if (model.usage.cost_usd !== null)
             total.cost_usd = (total.cost_usd || 0) + model.usage.cost_usd;
-        total.models.push({ roles: model_roles, api: model.constructor.prefix, model: model.model_name || 'default', ...model.usage });
+        const sessions = model.getSessions ? model.getSessions() : undefined;
+        total.models.push({ roles: model_roles, api: model.constructor.prefix, model: model.model_name || 'default', sessions, ...model.usage });
     }
     return total;
+}
+
+// Snapshot of cumulative usage for persisting across restarts (models are recreated fresh
+// on every startup, so counts otherwise reset to zero), keyed by which roles share an instance.
+export function snapshotAgentUsage(prompter) {
+    const roles = groupModelsByRole(prompter);
+    const snapshot = {};
+    for (const [model, model_roles] of roles)
+        snapshot[model_roles.join('+')] = { ...model.usage };
+    return snapshot;
+}
+
+// Restores a snapshot from snapshotAgentUsage onto the freshly-created models of a new
+// Prompter, matched by role grouping. Silently skips roles the snapshot doesn't have (e.g.
+// the profile's model config changed since the snapshot was saved).
+export function restoreAgentUsage(prompter, snapshot) {
+    if (!snapshot)
+        return;
+    const roles = groupModelsByRole(prompter);
+    for (const [model, model_roles] of roles) {
+        const saved = snapshot[model_roles.join('+')];
+        if (saved)
+            Object.assign(model.usage, saved);
+    }
 }

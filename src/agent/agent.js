@@ -18,6 +18,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import { restoreAgentUsage } from '../utils/usage.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -213,6 +214,9 @@ export class Agent {
         }
         if (save_data?.command_history) {
             this.command_history = save_data.command_history;
+        }
+        if (save_data?.usage) {
+            restoreAgentUsage(this.prompter, save_data.usage);
         }
         if (save_data?.last_sender) {
             this.last_sender = save_data.last_sender;

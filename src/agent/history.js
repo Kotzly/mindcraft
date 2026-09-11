@@ -1,6 +1,7 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
+import { snapshotAgentUsage } from '../utils/usage.js';
 
 
 export class History {
@@ -100,7 +101,8 @@ export class History {
                 planned_goal: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.planned_goal,
                 command_history: this.agent.command_history,
                 taskStart: this.agent.task.taskStartTime,
-                last_sender: this.agent.last_sender
+                last_sender: this.agent.last_sender,
+                usage: snapshotAgentUsage(this.agent.prompter)
             };
             writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
             console.log('Saved memory to:', this.memory_fp);

@@ -90,6 +90,14 @@ export class ClaudeCLI {
         return res.result;
     }
 
+    // active CLI session ids, keyed by the kind of prompt (conversation, coding, ...) —
+    // pass one to `claude --resume <id>` in bots/_claude_cli to inspect that transcript
+    getSessions() {
+        return Object.entries(this.sessions)
+            .filter(([, s]) => s.id)
+            .map(([key, s]) => ({ key, id: s.id }));
+    }
+
     _resetSession(session) {
         session.id = randomUUID();
         session.created = false;

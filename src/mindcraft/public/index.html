@@ -786,6 +786,17 @@
                         contextEl.textContent = `context: ~${formatTokens(st.contextTokens)} tokens`;
                         contextEl.title = 'Estimated from conversation history length (~4 chars/token). Does not include the system prompt/docs, which add more on top of this.';
                     }
+                    const sessionEl = document.getElementById(`session-${name}`);
+                    if (sessionEl && st.usage) {
+                        const sessionLines = formatSessions(st.usage);
+                        if (sessionLines) {
+                            sessionEl.style.display = '';
+                            sessionEl.textContent = `session: ${sessionLines}`;
+                            sessionEl.title = 'claude-cli session id(s). Pass one to `claude --resume <id>` (run from the bots/_claude_cli directory) to inspect that transcript in a terminal.';
+                        } else {
+                            sessionEl.style.display = 'none';
+                        }
+                    }
                     if (st.commandHistory) renderHistory(name, st.commandHistory);
                     if (st.todo) renderTodo(name, st.todo);
                     if (actionEl && st.action) {
@@ -845,6 +856,18 @@
                     text += `\n${m.roles.join('+')} (${m.api}/${m.model}): ${formatUsageLine(m)}`;
             }
             return text;
+        }
+
+        // claude-cli session ids, one line per role/kind of prompt that has an active session
+        function formatSessions(u) {
+            if (!u.models?.length) return null;
+            const lines = [];
+            for (const m of u.models) {
+                if (!m.sessions?.length) continue;
+                for (const s of m.sessions)
+                    lines.push(`${m.roles.join('+')}: ${s.id}`);
+            }
+            return lines.length ? lines.join('\n') : null;
         }
 
         function fetchAgentSettings(name) {
@@ -1030,6 +1053,7 @@
                             <div class="cell" id="equipped-${agent.name}">equipped: -</div>
                             <div class="cell" id="usage-${agent.name}" style="grid-column: 1 / -1; white-space: pre-line;">tokens: -</div>
                             <div class="cell" id="context-${agent.name}" style="grid-column: 1 / -1;">context: -</div>
+                            <div class="cell" id="session-${agent.name}" style="grid-column: 1 / -1; white-space: pre-line; display: none;">session: -</div>
                             <div class="agent-inventory" id="inventorySection-${agent.name}" style="${invStyle} grid-column: 1 / -1;">
                                 <h3>Inventory</h3>
                                 <div class="cell" id="armor-${agent.name}" style="margin-bottom: 8px;">armor: -</div>
