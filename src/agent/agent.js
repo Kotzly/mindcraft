@@ -421,7 +421,8 @@ export class Agent {
         }
         else {
             if (settings.speak) {
-                speak(to_translate, this.prompter.profile.speak_model);
+                // "system" applies to all bots; otherwise each profile's speak_model is used
+                speak(to_translate, settings.speak === 'system' ? 'system' : this.prompter.profile.speak_model);
             }
             if (settings.chat_ingame) {this.bot.chat(message);}
             sendOutputToServer(this.name, message);
