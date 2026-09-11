@@ -5,6 +5,7 @@ const settings = {
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
+    "mindserver_host": "localhost", // use "0.0.0.0" to access the UI from other machines on your network
     "mindserver_port": 8080,
     "auto_open_ui": true, // opens UI in browser on startup
     
