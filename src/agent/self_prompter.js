@@ -1,3 +1,5 @@
+import settings from './settings.js';
+
 const STOPPED = 0
 const ACTIVE = 1
 const PAUSED = 2
@@ -65,7 +67,7 @@ export class SelfPrompter {
         console.log('starting self-prompt loop')
         this.loop_active = true;
 
-        if (this.agent.settings.todo_list && this.agent.todo.items.length === 0 && this.planned_goal !== this.prompt) {
+        if (settings.todo_list && this.agent.todo.items.length === 0 && this.planned_goal !== this.prompt) {
             this.planned_goal = this.prompt;
             await this.planGoal();
         }
@@ -99,7 +101,7 @@ export class SelfPrompter {
     getLoopMessage() {
         let msg = `You are self-prompting with the goal: '${this.prompt}'.`;
 
-        if (this.agent.settings.todo_list && this.agent.todo.items.length > 0) {
+        if (settings.todo_list && this.agent.todo.items.length > 0) {
             const current = this.agent.todo.current();
             if (!current) {
                 msg += ` All todo steps are done. If the goal is fully met use !endGoal. If it is ongoing or not met, add the next steps with !setTodo.`;
@@ -110,7 +112,7 @@ export class SelfPrompter {
             } else {
                 msg += ` Your current todo step is ${current.number}: '${current.item.text}'. If the results above show it is finished, use !doneTodo(${current.number}), otherwise keep working on it.`;
             }
-        } else if (this.agent.settings.todo_list && this.agent.todo.items.length === 0) {
+        } else if (settings.todo_list && this.agent.todo.items.length === 0) {
             msg += ` First make a plan with !setTodo("step one; step two; ...").`;
         }
 

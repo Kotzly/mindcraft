@@ -45,6 +45,7 @@ export class Agent {
         this.npc = new NPCContoller(this);
         this.memory_bank = new MemoryBank();
         this.todo = new TodoList();
+        this.command_history = [];
         this.self_prompter = new SelfPrompter(this);
         convoManager.initAgent(this);
         await this.prompter.initExamples();
@@ -294,7 +295,8 @@ export class Agent {
                     this.history.add(source, message);
                 }
                 let execute_res = await executeCommand(this, message);
-                if (execute_res) 
+                this.logCommand(source, message.substring(message.indexOf(user_command_name)), execute_res);
+                if (execute_res)
                     this.routeResponse(source, execute_res);
                 return true;
             }
@@ -371,6 +373,7 @@ export class Agent {
                 }
 
                 let execute_res = await executeCommand(this, res);
+                this.logCommand(source, res.substring(res.indexOf(command_name)), execute_res);
 
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
@@ -394,6 +397,19 @@ export class Agent {
         }
 
         return used_command;
+    }
+
+    logCommand(source, command, result) {
+        this.command_history.push({
+            time: Date.now(),
+            source,
+            command: command.trim().slice(0, 200),
+            result: result ? String(result).trim().slice(0, 500) : null
+        });
+        const MAX_COMMAND_HISTORY = 50;
+        if (this.command_history.length > MAX_COMMAND_HISTORY) {
+            this.command_history.shift();
+        }
     }
 
     async routeResponse(to_player, message) {

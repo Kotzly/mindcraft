@@ -181,7 +181,7 @@ export class Prompter {
         if (prompt.includes('$SELF_PROMPT')) {
             // if active or paused, show the current goal
             let self_prompt = !this.agent.self_prompter.isStopped() ? `YOUR CURRENT ASSIGNED GOAL: "${this.agent.self_prompter.prompt}"\n` : '';
-            if (!this.agent.self_prompter.isStopped() && this.agent.settings.todo_list) {
+            if (!this.agent.self_prompter.isStopped() && settings.todo_list) {
                 const todo_render = this.agent.todo.render();
                 if (todo_render) {
                     self_prompt += todo_render + '\n';

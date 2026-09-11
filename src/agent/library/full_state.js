@@ -103,7 +103,8 @@ export function getFullState(agent) {
         modes: {
             summary: bot.modes.getMiniDocs()
         },
-        usage: getAgentUsage(agent.prompter)
+        usage: getAgentUsage(agent.prompter),
+        commandHistory: agent.command_history.slice(-15).reverse()
     };
 
     return state;
