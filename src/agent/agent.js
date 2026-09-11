@@ -212,6 +212,9 @@ export class Agent {
             }
             await this.self_prompter.handleLoad(save_data.self_prompt, save_data.self_prompting_state);
         }
+        if (save_data?.command_history) {
+            this.command_history = save_data.command_history;
+        }
         if (save_data?.last_sender) {
             this.last_sender = save_data.last_sender;
             if (convoManager.otherAgentInGame(this.last_sender)) {

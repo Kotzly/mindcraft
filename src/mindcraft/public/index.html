@@ -195,6 +195,33 @@
             word-break: break-word;
         }
         .history-list.empty { color: #999; }
+        .agent-todo {
+            margin-top: 8px;
+            background: #2f2f2f;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .agent-todo h3 { margin: 0 0 6px 0; font-size: 1em; }
+        .todo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .todo-list.empty { color: #999; }
+        .todo-item {
+            background: #262626;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.85em;
+            display: flex;
+            gap: 6px;
+        }
+        .todo-item.done { color: #7a7a7a; text-decoration: line-through; }
+        .todo-item.current { border-color: #f0ad4e; }
+        .todo-item .todo-check { font-family: monospace; }
+        .todo-item .todo-marker { color: #f0ad4e; text-decoration: none; margin-left: auto; white-space: nowrap; }
+        .todo-item.stuck .todo-marker { color: #f44336; }
         .inventory-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -483,6 +510,7 @@
         const agentLastMessage = {};
         const inventoryOpen = {};
         const historyOpen = {};
+        const todoOpen = {};
         let currentAgents = [];
 
         // Item texture helpers (use PrismarineJS minecraft-assets CDN with graceful fallbacks)
@@ -754,6 +782,7 @@
                             + (st.usage.cost_usd !== null ? '\ncost is the API list price (an estimate on a Claude subscription)' : '');
                     }
                     if (st.commandHistory) renderHistory(name, st.commandHistory);
+                    if (st.todo) renderTodo(name, st.todo);
                     if (actionEl && st.action) {
                         actionEl.textContent = `${st.action.current || 'Idle'}`;
                         const _statusColors = { acting: '#4CAF50', chatting: '#42a5f5', thinking: '#9e9e9e', stopped: '#f44336', idle: '#888' };
@@ -972,6 +1001,8 @@
             const invStyle = invOpen ? '' : 'display:none;';
             const histOpen = historyOpen[agent.name] === true;
             const histStyle = histOpen ? '' : 'display:none;';
+            const todoIsOpen = todoOpen[agent.name] === true;
+            const todoStyle = todoIsOpen ? '' : 'display:none;';
             return `
                     <div class="agent" id="agent-${agent.name}">
                         <div class="agent-grid">
@@ -980,6 +1011,7 @@
                                     <button class="gear-btn" title="Settings" onclick="openAgentSettings('${agent.name}')">⚙</button>
                                     <button class="gear-btn" title="Inventory" onclick="toggleDetails('${agent.name}')">Inventory</button>
                                     <button class="gear-btn" title="Command History" onclick="toggleHistory('${agent.name}')">History</button>
+                                    <button class="gear-btn" title="Todo List" onclick="toggleTodo('${agent.name}')">Todo</button>
                                 </span>
                             </div>
                             ${showViewer ? `<div class="cell" style="grid-row: span 3; padding:0;">${viewerHTML}</div>` : ''}
@@ -1000,6 +1032,10 @@
                             <div class="agent-history" id="historySection-${agent.name}" style="${histStyle} grid-column: 1 / -1;">
                                 <h3>Command History</h3>
                                 <div class="history-list" id="history-${agent.name}"></div>
+                            </div>
+                            <div class="agent-todo" id="todoSection-${agent.name}" style="${todoStyle} grid-column: 1 / -1;">
+                                <h3>Todo List</h3>
+                                <div class="todo-list" id="todo-${agent.name}"></div>
                             </div>
                             <div id="lastMessage-${agent.name}" class="last-message" style="grid-column: 1 / -1;"><strong>Last Message:</strong> ${lastMessage}</div>
                         </div>
@@ -1064,6 +1100,7 @@
                     el.remove();
                     delete inventoryOpen[name];
                     delete historyOpen[name];
+                    delete todoOpen[name];
                 }
             });
         }
@@ -1123,6 +1160,7 @@
                     el.remove();
                     delete inventoryOpen[name];
                     delete historyOpen[name];
+                    delete todoOpen[name];
                 }
             });
         });
@@ -1220,6 +1258,53 @@
 
         function escapeHtml(s) {
             return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function toggleTodo(name) {
+            const todoSection = document.getElementById(`todoSection-${name}`);
+            if (!todoSection) return;
+            const visible = todoSection.style.display !== 'none';
+            const newVisible = !visible;
+            todoSection.style.display = newVisible ? '' : 'none';
+            todoOpen[name] = newVisible;
+            if (newVisible) {
+                const st = window.lastStates && window.lastStates[name];
+                if (st) renderTodo(name, st.todo);
+            }
+        }
+        window.toggleTodo = toggleTodo;
+
+        function renderTodo(name, todo) {
+            const listEl = document.getElementById(`todo-${name}`);
+            if (!listEl) return;
+            if (!todo || !todo.items || todo.items.length === 0) {
+                listEl.classList.add('empty');
+                listEl.innerHTML = '<div class="cell">(no todo list yet)</div>';
+                return;
+            }
+            listEl.classList.remove('empty');
+            const currentIndex = todo.items.findIndex(i => !i.done);
+            listEl.innerHTML = todo.items.map((item, i) => {
+                const isCurrent = i === currentIndex;
+                const stuck = isCurrent && todo.stuck;
+                const classes = ['todo-item'];
+                if (item.done) classes.push('done');
+                if (isCurrent) classes.push('current');
+                if (stuck) classes.push('stuck');
+                let marker = '';
+                if (isCurrent) {
+                    marker = stuck
+                        ? `<span class="todo-marker">stuck (${todo.attempts} commands)</span>`
+                        : `<span class="todo-marker">current (${todo.attempts})</span>`;
+                }
+                return `
+                    <div class="${classes.join(' ')}">
+                        <span class="todo-check">[${item.done ? 'x' : ' '}]</span>
+                        <span>${i + 1}. ${escapeHtml(item.text)}</span>
+                        ${marker}
+                    </div>
+                `;
+            }).join('');
         }
     </script>
 </body>

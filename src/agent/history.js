@@ -88,6 +88,7 @@ export class History {
                 self_prompt: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.prompt,
                 todo: this.agent.self_prompter.isStopped() ? null : this.agent.todo.toJSON(),
                 planned_goal: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.planned_goal,
+                command_history: this.agent.command_history,
                 taskStart: this.agent.task.taskStartTime,
                 last_sender: this.agent.last_sender
             };
