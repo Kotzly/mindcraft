@@ -36,6 +36,8 @@ export async function createAgent(settings) {
         };
     }
     settings = JSON.parse(JSON.stringify(settings));
+    // a profile can override global settings for its own agent, e.g. "settings": {"allow_vision": true}
+    Object.assign(settings, settings.profile.settings);
     let agent_name = settings.profile.name;
     const agentIndex = agent_count++;
     const viewer_port = 3000 + agentIndex;
