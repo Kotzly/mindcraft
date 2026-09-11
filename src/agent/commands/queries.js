@@ -344,4 +344,47 @@ export const queryList = [
             return getCommandDocs(agent);
         }
     },
+    {
+        name: '!setTodo',
+        description: 'Set the goal plan as a todo list. Steps separated by semicolons or newlines.',
+        params: {
+            'steps': { type: 'string', description: 'Steps separated by ; or newlines, e.g. "mine 3 ore; smelt ore; craft pickaxe"' }
+        },
+        perform: function (agent, steps) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            const parsed = agent.todo.constructor.parseSteps(steps);
+            agent.todo.set(parsed);
+            return '\n' + agent.todo.render() + '\n';
+        }
+    },
+    {
+        name: '!addTodo',
+        description: 'Add a missing step to the plan, inserted before the current step.',
+        params: {
+            'step': { type: 'string', description: 'A missing step' }
+        },
+        perform: function (agent, step) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            agent.todo.add(step);
+            return '\n' + agent.todo.render() + '\n';
+        }
+    },
+    {
+        name: '!doneTodo',
+        description: 'Mark the current step as done and move to the next one. The step number must be the current step.',
+        params: {
+            'step': { type: 'int', description: 'The current step number', domain: [1, Infinity] }
+        },
+        perform: function (agent, step) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            const result = agent.todo.done(step);
+            return '\n' + result + '\n';
+        }
+    },
 ];

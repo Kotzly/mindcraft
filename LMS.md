@@ -13,7 +13,7 @@ Andy-4.2-Air Q6_K needs about 3.5 GB of VRAM, plus about 0.7 GB for the vision p
 - Don't load the same model in Ollama and LM Studio at the same time. Each one loads its own copy on the GPU.
 - Unload the Ollama chat models: `ollama ps`, then `ollama stop <name>` for each chat model.
   Keep `embeddinggemma`, since the profile still uses Ollama for embeddings.
-- Close the bot viewer tabs (`localhost:3000`, `3001`, ...) if RAM is low.
+- Close the bot viewer tabs (`0.0.0.0:3000`, `3001`, ...) if RAM is low.
 
 ## 2. Start LM Studio
 
@@ -87,16 +87,16 @@ To check memory before loading, add `--estimate-only`. To confirm it's loaded, r
 ## 5. Start the server on port 7765
 
 ```bash
-lms server start --port 7765
+lms server start --port 7765 --bind 0.0.0.0
 ```
 
-The server binds to `127.0.0.1` by default, which is enough for the bot.
+The server binds to `localhost` by default. But now it runs on the network.
 
 To check it's running:
 
 ```bash
 lms server status
-curl http://localhost:7765/v1/models    # should list "andy-4.2-air"
+curl http://0.0.0.0:7765/v1/models    # should list "andy-4.2-air"
 ```
 
 ## 6. Run the bot
@@ -107,7 +107,7 @@ In `settings.js`, uncomment:
 "./profiles/andy42air-lmstudio-haiku.json",
 ```
 
-Then start it with `node main.js`, and talk to it with `/msg AndyAirLMS ...` in Minecraft or from the dashboard at `localhost:8080`.
+Then start it with `node main.js`, and talk to it with `/msg AndyAirLMS ...` in Minecraft or from the dashboard at `0.0.0.0:8080`.
 
 ## Vision
 
@@ -129,7 +129,7 @@ To turn vision off for this bot only, set `"allow_vision": false` in the profile
 
 ## Changing the port
 
-The port lives only in the profile's `"url"` field (`http://localhost:7765/v1`). To use another port, change both:
+The port lives only in the profile's `"url"` field (`http://0.0.0.0:7765/v1`). To use another port, change both:
 
 - the `--port` in `lms server start`
 - `"url"` in `profiles/andy42air-lmstudio-haiku.json`

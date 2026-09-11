@@ -8,6 +8,7 @@ export class SelfPrompter {
         this.loop_active = false;
         this.interrupt = false;
         this.prompt = '';
+        this.planned_goal = null;
         this.idle_time = 0;
         this.cooldown = 2000;
     }
@@ -18,6 +19,9 @@ export class SelfPrompter {
             if (!this.prompt)
                 return 'No prompt specified. Ignoring request.';
             prompt = this.prompt;
+        } else {
+            this.agent.todo.clear();
+            this.planned_goal = null;
         }
         this.state = ACTIVE;
         this.prompt = prompt;
@@ -60,11 +64,17 @@ export class SelfPrompter {
         }
         console.log('starting self-prompt loop')
         this.loop_active = true;
+
+        if (this.agent.settings.todo_list && this.agent.todo.items.length === 0 && this.planned_goal !== this.prompt) {
+            this.planned_goal = this.prompt;
+            await this.planGoal();
+        }
+
         let no_command_count = 0;
         const MAX_NO_COMMAND = 3;
         while (!this.interrupt) {
-            const msg = `You are self-prompting with the goal: '${this.prompt}'. Your next response MUST contain a command with this syntax: !commandName. Respond:`;
-            
+            const msg = this.getLoopMessage();
+
             let used_command = await this.agent.handleMessage('system', msg, -1);
             if (!used_command) {
                 no_command_count++;
@@ -84,6 +94,40 @@ export class SelfPrompter {
         console.log('self prompt loop stopped')
         this.loop_active = false;
         this.interrupt = false;
+    }
+
+    getLoopMessage() {
+        let msg = `You are self-prompting with the goal: '${this.prompt}'.`;
+
+        if (this.agent.settings.todo_list && this.agent.todo.items.length > 0) {
+            const current = this.agent.todo.current();
+            if (!current) {
+                msg += ` All todo steps are done. If the goal is fully met use !endGoal. If it is ongoing or not met, add the next steps with !setTodo.`;
+            } else if (this.agent.todo.isStuck()) {
+                msg += ` Your current todo step is ${current.number}: '${current.item.text}'. It has taken ${this.agent.todo.attempts} commands. Try a different approach, split it with !setTodo, or ask for help.`;
+            } else if (this.agent.todo.attempts === 0) {
+                msg += ` Your current todo step is ${current.number}: '${current.item.text}'.`;
+            } else {
+                msg += ` Your current todo step is ${current.number}: '${current.item.text}'. If the results above show it is finished, use !doneTodo(${current.number}), otherwise keep working on it.`;
+            }
+        } else if (this.agent.settings.todo_list && this.agent.todo.items.length === 0) {
+            msg += ` First make a plan with !setTodo("step one; step two; ...").`;
+        }
+
+        msg += ` Your next response MUST contain a command with this syntax: !commandName. Respond:`;
+        return msg;
+    }
+
+    async planGoal() {
+        const { TodoList } = await import('./todo_list.js');
+
+        const steps = TodoList.parseNumberedGoal(this.prompt);
+        if (steps) {
+            this.agent.todo.set(steps);
+            return;
+        }
+
+        await this.agent.prompter.promptPlanning(this.prompt);
     }
 
     update(delta) {
@@ -123,6 +167,7 @@ export class SelfPrompter {
             await this.agent.actions.stop();
         this.stopLoop();
         this.state = STOPPED;
+        this.agent.todo.clear();
     }
 
     async pause() {

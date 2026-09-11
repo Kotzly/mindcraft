@@ -1,11 +1,11 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
-    "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
+    "host": "localhost", // or "localhost", "your.ip.address.here"
     "port": 55916, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
-    "mindserver_host": "localhost", // use "0.0.0.0" to access the UI from other machines on your network
+    "mindserver_host": "192.168.0.166",
     "mindserver_port": 8080,
     "auto_open_ui": true, // opens UI in browser on startup
     
@@ -22,8 +22,11 @@ const settings = {
         // "./profiles/mistral.json",
         // "./profiles/deepseek.json",
         // "./profiles/mercury.json",
-        "./profiles/claude-cli.json",
-        "./profiles/andy-haiku.json",
+
+
+        // "./profiles/claude-cli.json",
+        // "./profiles/andy-haiku.json",
+        "./profiles/haiku.json",
         // "./profiles/andy4-haiku.json", // Andy-4 8B (ollama) + haiku for code
         // "./profiles/andy42air-ollama-haiku.json", // Andy-4.2-Air (ollama) + haiku for code
         // "./profiles/andy42air-lmstudio-haiku.json", // Andy-4.2-Air (LM Studio server) + haiku for code
@@ -63,7 +66,8 @@ const settings = {
 
     "spawn_timeout": 30, // num seconds allowed for the bot to spawn before throwing error. Increase when spawning takes a while.
     "block_place_delay": 0, // delay between placing blocks (ms) if using newAction. helps avoid bot being kicked by anti-cheat mechanisms on servers.
-  
+
+    "todo_list": true, // goals keep a todo list in the prompt and get an automatic plan
     "log_all_prompts": false, // log ALL prompts to file
 };
 

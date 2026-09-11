@@ -86,6 +86,8 @@ export class History {
                 turns: this.turns,
                 self_prompting_state: this.agent.self_prompter.state,
                 self_prompt: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.prompt,
+                todo: this.agent.self_prompter.isStopped() ? null : this.agent.todo.toJSON(),
+                planned_goal: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.planned_goal,
                 taskStart: this.agent.task.taskStartTime,
                 last_sender: this.agent.last_sender
             };

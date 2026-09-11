@@ -1,0 +1,7 @@
+{
+    "name": "Haiku",
+    "model": "claude-cli/haiku",
+    "params": {"effort": "low"},
+    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
+    "embedding": "ollama"
+}

@@ -9,6 +9,7 @@ import { ActionManager } from './action_manager.js';
 import { NPCContoller } from './npc/controller.js';
 import { MemoryBank } from './memory_bank.js';
 import { SelfPrompter } from './self_prompter.js';
+import { TodoList } from './todo_list.js';
 import convoManager from './conversation.js';
 import { handleTranslation, handleEnglishTranslation } from '../utils/translator.js';
 import { addBrowserViewer } from './vision/browser_viewer.js';
@@ -43,6 +44,7 @@ export class Agent {
         this.coder = new Coder(this);
         this.npc = new NPCContoller(this);
         this.memory_bank = new MemoryBank();
+        this.todo = new TodoList();
         this.self_prompter = new SelfPrompter(this);
         convoManager.initAgent(this);
         await this.prompter.initExamples();
@@ -60,6 +62,9 @@ export class Agent {
         }
         this.task = new Task(this, settings.task, taskStart);
         this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []);
+        if (!settings.todo_list) {
+            this.blocked_actions = this.blocked_actions.concat(['!setTodo', '!addTodo', '!doneTodo']);
+        }
         blacklistCommands(this.blocked_actions);
 
         console.log(this.name, 'logging into minecraft...');
@@ -197,6 +202,12 @@ export class Agent {
         if (save_data?.self_prompt) {
             if (init_message) {
                 this.history.add('system', init_message);
+            }
+            if (save_data.todo) {
+                this.todo.load(save_data.todo);
+                if (save_data.planned_goal) {
+                    this.self_prompter.planned_goal = save_data.planned_goal;
+                }
             }
             await this.self_prompter.handleLoad(save_data.self_prompt, save_data.self_prompting_state);
         }
@@ -363,6 +374,10 @@ export class Agent {
 
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
+
+                if (self_prompt && !['!setTodo', '!addTodo', '!doneTodo'].includes(command_name)) {
+                    this.todo.tick();
+                }
 
                 if (execute_res)
                     this.history.add('system', execute_res);

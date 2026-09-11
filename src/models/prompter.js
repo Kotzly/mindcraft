@@ -75,7 +75,15 @@ export class Prompter {
             this.vision_model = this.chat_model;
         }
 
-        
+        if (this.profile.planning_model) {
+            let planning_model_profile = selectAPI(this.profile.planning_model);
+            this.planning_model = createModel(planning_model_profile);
+        }
+        else {
+            this.planning_model = this.chat_model;
+        }
+
+
         let embedding_model_profile = null;
         if (this.profile.embedding) {
             try {
@@ -173,6 +181,12 @@ export class Prompter {
         if (prompt.includes('$SELF_PROMPT')) {
             // if active or paused, show the current goal
             let self_prompt = !this.agent.self_prompter.isStopped() ? `YOUR CURRENT ASSIGNED GOAL: "${this.agent.self_prompter.prompt}"\n` : '';
+            if (!this.agent.self_prompter.isStopped() && this.agent.settings.todo_list) {
+                const todo_render = this.agent.todo.render();
+                if (todo_render) {
+                    self_prompt += todo_render + '\n';
+                }
+            }
             prompt = prompt.replaceAll('$SELF_PROMPT', self_prompt);
         }
         if (prompt.includes('$LAST_GOALS')) {
@@ -288,6 +302,30 @@ export class Prompter {
             resp = afterThink;
         }
         return resp;
+    }
+
+    async promptPlanning(goal) {
+        await this.checkCooldown();
+        let prompt = this.profile.planning || this.profile.saving_memory;
+        if (!prompt) return;
+        const oldPrompt = this.agent.self_prompter.prompt;
+        this.agent.self_prompter.prompt = goal;
+        prompt = await this.replaceStrings(prompt, [], null, null);
+        this.agent.self_prompter.prompt = oldPrompt;
+
+        const model = this.planning_model || this.chat_model;
+        let resp = await model.sendRequest([], prompt);
+        await this._saveLog(prompt, [], resp, 'planning');
+        if (resp?.includes('</think>')) {
+            const [_, afterThink] = resp.split('</think>')
+            resp = afterThink;
+        }
+
+        const { TodoList } = await import('../agent/todo_list.js');
+        const steps = TodoList.parseSteps(resp);
+        if (steps.length > 0) {
+            this.agent.todo.set(steps);
+        }
     }
 
     async promptShouldRespondToBot(new_message) {
