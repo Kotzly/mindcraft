@@ -45,7 +45,7 @@ export class ActionManager {
         const new_resume = actionFn != null;
         if (new_resume) { // start new resume
             this.resume_func = actionFn;
-            assert(actionLabel != null, 'actionLabel is required for new resume');
+            if (actionLabel == null) throw new Error('actionLabel is required for new resume');
             this.resume_name = actionLabel;
         }
         if (this.resume_func != null && (this.agent.isIdle() || new_resume) && (!this.agent.self_prompter.isActive() || new_resume)) {

@@ -109,11 +109,15 @@ export function parseCommandMessage(message) {
 
     const params = commandParams(command);
     const paramNames = commandParamNames(command);
-    
-    if (args.length !== params.length)
-        return `Command ${command.name} was given ${args.length} args, but requires ${params.length} args.`;
 
-    
+    const required = params.filter(p => !p.optional).length;
+    if (args.length < required || args.length > params.length)
+        return `Command ${command.name} was given ${args.length} args, but requires ${required}${required !== params.length ? ` to ${params.length}` : ''} args.`;
+    // fill defaults for omitted optional params
+    for (let i = args.length; i < params.length; i++)
+        args.push(params[i].default !== undefined ? String(params[i].default) : '');
+
+
     for (let i = 0; i < args.length; i++) {
         const param = params[i];
         //Remove any extra characters
@@ -216,16 +220,8 @@ export async function executeCommand(agent, message) {
     else {
         console.log('parsed command:', parsed);
         const command = getCommand(parsed.commandName);
-        let numArgs = 0;
-        if (parsed.args) {
-            numArgs = parsed.args.length;
-        }
-        if (numArgs !== numParams(command))
-            return `Command ${command.name} was given ${numArgs} args, but requires ${numParams(command)} args.`;
-        else {
-            const result = await command.perform(agent, ...parsed.args);
-            return result;
-        }
+        const result = await command.perform(agent, ...parsed.args);
+        return result;
     }
 }
 
@@ -251,7 +247,11 @@ export function getCommandDocs(agent) {
         if (command.params) {
             docs += 'Params:\n';
             for (let param in command.params) {
-                docs += `${param}: (${typeTranslations[command.params[param].type]??command.params[param].type}) ${command.params[param].description}\n`;
+                let paramDoc = `${param}: (${typeTranslations[command.params[param].type]??command.params[param].type}) ${command.params[param].description}`;
+                if (command.params[param].optional) {
+                    paramDoc += ` (optional, default ${command.params[param].default})`;
+                }
+                docs += paramDoc + '\n';
             }
         }
     }

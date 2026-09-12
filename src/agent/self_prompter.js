@@ -1,5 +1,3 @@
-import settings from './settings.js';
-
 const STOPPED = 0
 const ACTIVE = 1
 const PAUSED = 2
@@ -9,8 +7,8 @@ export class SelfPrompter {
         this.state = STOPPED;
         this.loop_active = false;
         this.interrupt = false;
+        this.in_loop_message = false;
         this.prompt = '';
-        this.planned_goal = null;
         this.idle_time = 0;
         this.cooldown = 2000;
     }
@@ -21,9 +19,6 @@ export class SelfPrompter {
             if (!this.prompt)
                 return 'No prompt specified. Ignoring request.';
             prompt = this.prompt;
-        } else {
-            this.agent.todo.clear();
-            this.planned_goal = null;
         }
         this.state = ACTIVE;
         this.prompt = prompt;
@@ -45,18 +40,13 @@ export class SelfPrompter {
     async handleLoad(prompt, state) {
         if (state == undefined)
             state = STOPPED;
+        this.state = state;
         this.prompt = prompt;
         if (state !== STOPPED && !prompt)
             throw new Error('No prompt loaded when self-prompting is active');
-        if (state === STOPPED) {
-            this.state = STOPPED;
-            return;
+        if (state === ACTIVE) {
+            await this.start(prompt);
         }
-        // a loaded PAUSED state was waiting on a conversation that doesn't exist anymore
-        // after a restart, so resume the goal loop either way. call start() with no args
-        // so it reuses this.prompt/this.todo instead of treating this as a brand new goal.
-        this.state = ACTIVE;
-        this.start();
     }
 
     setPromptPaused(prompt) {
@@ -71,18 +61,14 @@ export class SelfPrompter {
         }
         console.log('starting self-prompt loop')
         this.loop_active = true;
-
-        if (settings.todo_list && this.agent.todo.items.length === 0 && this.planned_goal !== this.prompt) {
-            this.planned_goal = this.prompt;
-            await this.planGoal();
-        }
-
         let no_command_count = 0;
         const MAX_NO_COMMAND = 3;
         while (!this.interrupt) {
-            const msg = this.getLoopMessage();
+            const msg = `You are self-prompting with the goal: '${this.prompt}'. Your next response MUST contain a command with this syntax: !commandName. Respond:`;
 
+            this.in_loop_message = true;
             let used_command = await this.agent.handleMessage('system', msg, -1);
+            this.in_loop_message = false;
             if (!used_command) {
                 no_command_count++;
                 if (no_command_count >= MAX_NO_COMMAND) {
@@ -101,40 +87,6 @@ export class SelfPrompter {
         console.log('self prompt loop stopped')
         this.loop_active = false;
         this.interrupt = false;
-    }
-
-    getLoopMessage() {
-        let msg = `You are self-prompting with the goal: '${this.prompt}'.`;
-
-        if (settings.todo_list && this.agent.todo.items.length > 0) {
-            const current = this.agent.todo.current();
-            if (!current) {
-                msg += ` All todo steps are done. If the goal is fully met use !endGoal. If it is ongoing or not met, add the next steps with !setTodo.`;
-            } else if (this.agent.todo.isStuck()) {
-                msg += ` Your current todo step is ${current.number}: '${current.item.text}'. It has taken ${this.agent.todo.attempts} commands. Try a different approach, split it with !setTodo, or ask for help.`;
-            } else if (this.agent.todo.attempts === 0) {
-                msg += ` Your current todo step is ${current.number}: '${current.item.text}'.`;
-            } else {
-                msg += ` Your current todo step is ${current.number}: '${current.item.text}'. If the results above show it is finished, use !doneTodo(${current.number}), otherwise keep working on it.`;
-            }
-        } else if (settings.todo_list && this.agent.todo.items.length === 0) {
-            msg += ` First make a plan with !setTodo("step one; step two; ...").`;
-        }
-
-        msg += ` Your next response MUST contain a command with this syntax: !commandName. Respond:`;
-        return msg;
-    }
-
-    async planGoal() {
-        const { TodoList } = await import('./todo_list.js');
-
-        const steps = TodoList.parseNumberedGoal(this.prompt);
-        if (steps) {
-            this.agent.todo.set(steps);
-            return;
-        }
-
-        await this.agent.prompter.promptPlanning(this.prompt);
     }
 
     update(delta) {
@@ -157,31 +109,24 @@ export class SelfPrompter {
     }
 
     async stopLoop() {
-        // you can call this without await if you don't need to wait for it to finish
-        if (this.interrupt)
-            return;
-        console.log('stopping self-prompt loop')
+        if (!this.loop_active) { this.interrupt = false; return; }
+        // deadlock guard: if called from within the loop's own handleMessage, just set the flag
+        if (this.in_loop_message) { this.interrupt = true; return; }
         this.interrupt = true;
-        while (this.loop_active) {
+        while (this.loop_active)
             await new Promise(r => setTimeout(r, 500));
-        }
         this.interrupt = false;
     }
-
     async stop(stop_action=true) {
-        this.interrupt = true;
-        if (stop_action)
-            await this.agent.actions.stop();
-        this.stopLoop();
-        this.state = STOPPED;
+        this.state = STOPPED;          // set first so update() cannot restart the loop meanwhile
+        if (stop_action) await this.agent.actions.stop();
+        await this.stopLoop();
         this.agent.todo.clear();
     }
-
     async pause() {
-        this.interrupt = true;
-        await this.agent.actions.stop();
-        this.stopLoop();
         this.state = PAUSED;
+        await this.agent.actions.stop();
+        await this.stopLoop();
     }
 
     shouldInterrupt(is_self_prompt) { // to be called from handleMessage

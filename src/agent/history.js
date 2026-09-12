@@ -1,7 +1,6 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
-import { snapshotAgentUsage } from '../utils/usage.js';
 
 
 export class History {
@@ -19,7 +18,7 @@ export class History {
         this.memory = '';
 
         // Maximum number of messages to keep in context before saving chunk to memory
-        this.max_messages = agent.prompter.profile.max_messages ?? settings.max_messages;
+        this.max_messages = settings.max_messages;
 
         // Number of messages to remove from current history and save into memory
         this.summary_chunk_size = 5; 
@@ -31,19 +30,14 @@ export class History {
         return JSON.parse(JSON.stringify(this.turns));
     }
 
-    // rough estimate (~4 chars/token) of the live conversation window's size, since most
-    // providers here don't expose a tokenizer; doesn't include the system prompt/docs.
-    estimateTokens() {
-        let chars = this.memory.length;
-        for (const turn of this.turns) {
-            chars += typeof turn.content === 'string' ? turn.content.length : JSON.stringify(turn.content).length;
-        }
-        return Math.round(chars / 4);
-    }
-
     async summarizeMemories(turns) {
         console.log("Storing memories...");
-        this.memory = await this.agent.prompter.promptMemSaving(turns);
+        try {
+            this.memory = await this.agent.prompter.promptMemSaving(turns);
+        } catch (err) {
+            console.error('Memory saving failed, keeping old memory:', err);
+            return;
+        }
 
         if (this.memory.length > 500) {
             this.memory = this.memory.slice(0, 500);
@@ -69,26 +63,25 @@ export class History {
         }
     }
 
-    async add(name, content) {
+    add(name, content) {
         let role = 'assistant';
-        if (name === 'system') {
-            role = 'system';
-        }
-        else if (name !== this.name) {
-            role = 'user';
-            content = `${name}: ${content}`;
-        }
+        if (name === 'system') role = 'system';
+        else if (name !== this.name) { role = 'user'; content = `${name}: ${content}`; }
         this.turns.push({role, content});
-
-        if (this.turns.length >= this.max_messages) {
-            let chunk = this.turns.splice(0, this.summary_chunk_size);
-            while (this.turns.length > 0 && this.turns[0].role === 'assistant')
-                chunk.push(this.turns.shift()); // remove until turns starts with system/user message
-
-            this.agent.prompter.notifyHistoryTrimmed();
-            await this.summarizeMemories(chunk);
-            await this.appendFullHistory(chunk);
-        }
+        if (this.turns.length >= this.max_messages)
+            this._scheduleTrim();
+    }
+    _scheduleTrim() {
+        this._trim_queue = (this._trim_queue || Promise.resolve()).then(() => this._trim()).catch(err => console.error('History trim failed:', err));
+    }
+    async _trim() {
+        if (this.turns.length < this.max_messages) return;
+        let chunk = this.turns.splice(0, this.summary_chunk_size);
+        while (this.turns.length > 0 && this.turns[0].role === 'assistant')
+            chunk.push(this.turns.shift());
+        this.agent.prompter.notifyHistoryTrimmed();
+        await this.summarizeMemories(chunk);
+        await this.appendFullHistory(chunk);
     }
 
     async save() {
@@ -98,12 +91,8 @@ export class History {
                 turns: this.turns,
                 self_prompting_state: this.agent.self_prompter.state,
                 self_prompt: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.prompt,
-                todo: this.agent.self_prompter.isStopped() ? null : this.agent.todo.toJSON(),
-                planned_goal: this.agent.self_prompter.isStopped() ? null : this.agent.self_prompter.planned_goal,
-                command_history: this.agent.command_history,
                 taskStart: this.agent.task.taskStartTime,
-                last_sender: this.agent.last_sender,
-                usage: snapshotAgentUsage(this.agent.prompter)
+                last_sender: this.agent.last_sender
             };
             writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
             console.log('Saved memory to:', this.memory_fp);
