@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs
 // Shared across all bots (they navigate the same world), so protection survives
 // bot restarts and applies regardless of which bot declared it.
 // File is re-read when the mtime changes, so all bots see each other's changes.
-const REGIONS_DIR = './bots/_shared';
+const REGIONS_DIR = process.env.MINDCRAFT_REGIONS_DIR ?? './bots/_shared';
 const REGIONS_FP = `${REGIONS_DIR}/protected_regions.json`;
 
 let regions = [];

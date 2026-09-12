@@ -203,7 +203,7 @@ export class ClaudeCLI {
 // turns[0..synced) must match the session ending at `end`, with only assistant
 // replies after that. The longest overlap wins, so a short repeated exchange
 // ("ok") at the very end can't hide the real one.
-function matchSession(session_turns, turns) {
+export function matchSession(session_turns, turns) {
     let best = { synced: 0, dropped: 0 };
     for (let end = session_turns.length; end > 0; end--) {
         if (end < session_turns.length && session_turns[end].role !== 'assistant')
@@ -228,7 +228,7 @@ function sameTurn(session_turn, turn) {
 }
 
 // user turns already carry the sender's name; system turns get the label strictFormat uses
-function renderTurns(turns) {
+export function renderTurns(turns) {
     return turns.map(turn => {
         if (turn.role === 'system')
             return `SYSTEM: ${turn.content}`;
