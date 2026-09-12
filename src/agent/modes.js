@@ -88,6 +88,43 @@ const modes_list = [
         }
     },
     {
+        name: 'tool_durability_warning',
+        description: 'Warn when the held tool (pickaxe, axe, shovel, sword, hoe) is about to break, and when it breaks.',
+        interrupts: [],
+        on: true,
+        active: false,
+        warn_threshold: 0.05, // warn when 5% or less durability remains
+        warned_item_name: null, // name of the item last warned about, to avoid spamming every tick
+        prev_item_name: null, // name of the held item last tick, to detect it breaking
+        prev_remaining: null, // its durability remaining last tick
+        update: function (agent) {
+            const item = agent.bot.heldItem;
+            const cur_name = item ? item.name : null;
+            const cur_remaining = (item && item.maxDurability && item.durabilityUsed != null)
+                ? 1 - (item.durabilityUsed / item.maxDurability)
+                : null;
+
+            // a tool that was nearly broken and is now gone from the hand just broke
+            if (cur_name === null && this.prev_item_name !== null &&
+                this.prev_remaining !== null && this.prev_remaining <= this.warn_threshold) {
+                say(agent, `My ${this.prev_item_name} broke!`);
+                this.warned_item_name = null;
+            }
+            else if (cur_remaining !== null && cur_remaining <= this.warn_threshold) {
+                if (this.warned_item_name !== cur_name) {
+                    this.warned_item_name = cur_name;
+                    say(agent, `My ${cur_name} is about to break! (${Math.round(cur_remaining * 100)}% durability left)`);
+                }
+            }
+            else {
+                this.warned_item_name = null;
+            }
+
+            this.prev_item_name = cur_name;
+            this.prev_remaining = cur_remaining;
+        }
+    },
+    {
         name: 'unstuck',
         description: 'Attempt to get unstuck when in the same place for a while. Interrupts some actions.',
         interrupts: ['all'],
