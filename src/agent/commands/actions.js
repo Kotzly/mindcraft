@@ -158,6 +158,14 @@ export const actionsList = [
         })
     },
     {
+        name: '!getUnstuck',
+        description: 'Try to free yourself when trapped: jump and strafe around, and dig out if boxed in.',
+        params: {},
+        perform: runAsAction(async (agent) => {
+            await skills.getUnstuck(agent.bot);
+        })
+    },
+    {
         name: '!rememberHere',
         description: 'Save the current location with a given name.',
         params: {'name': { type: 'string', description: 'The name to remember the location as.' }},

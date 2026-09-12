@@ -99,6 +99,8 @@ const modes_list = [
         last_time: Date.now(),
         max_stuck_time: 20,
         prev_dig_block: null,
+        failed_recoveries: 0,
+        max_recoveries: 5,
         update: async function (agent) {
             if (agent.isIdle()) { 
                 this.prev_location = null;
@@ -118,16 +120,34 @@ const modes_list = [
                 this.stuck_time = 0;
                 this.prev_dig_block = null;
             }
-            const max_stuck_time = cur_dig_block?.name === 'obsidian' ? this.max_stuck_time * 2 : this.max_stuck_time;
+            let max_stuck_time = cur_dig_block?.name === 'obsidian' ? this.max_stuck_time * 2 : this.max_stuck_time;
+            // back off between attempts so repeated failures don't interrupt the bot constantly
+            max_stuck_time *= 1 + this.failed_recoveries;
             if (this.stuck_time > max_stuck_time) {
                 say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;
+                const stuck_pos = bot.entity.position.clone();
+                // recovery escalates: free the bot physically, then walk away, then dig out.
+                // it is bounded by the action timeout instead of killing the process on a timer,
+                // since restarting respawns the bot in the same place it was stuck in
                 execute(this, agent, async () => {
-                    const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 10000);
-                    await skills.moveAway(bot, 5);
-                    clearTimeout(crashTimeout);
-                    say(agent, 'I\'m free.');
-                });
+                    let freed = await skills.getUnstuck(bot);
+                    if (!freed) {
+                        await skills.moveAway(bot, 5);
+                        freed = bot.entity.position.distanceTo(stuck_pos) > this.distance;
+                    }
+                    if (freed) {
+                        this.failed_recoveries = 0;
+                        say(agent, 'I\'m free.');
+                        return;
+                    }
+                    this.failed_recoveries++;
+                    say(agent, `I couldn't get free (attempt ${this.failed_recoveries}).`);
+                    await agent.history.add('system', `You are stuck at ${stuck_pos.floored()} and ${this.failed_recoveries} automatic recovery attempts failed. You are likely trapped. Try digging out with !digDown, placing blocks to climb out, or travelling in a different direction.`);
+                    if (this.failed_recoveries >= this.max_recoveries) {
+                        agent.cleanKill('Stuck and unable to recover after repeated attempts.');
+                    }
+                }, 2);
             }
             this.last_time = Date.now();
         },

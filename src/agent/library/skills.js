@@ -102,7 +102,7 @@ export async function craftRecipe(bot, itemName, num=1) {
     
     await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
-    else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
+    else log(bot, `Successfully crafted ${itemName}, total of ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
         await collectBlock(bot, 'crafting_table', 1);
     }
@@ -541,10 +541,9 @@ export async function pickupNearbyItems(bot) {
     let nearestItem = getNearestItem(bot);
     let pickedUp = 0;
     while (nearestItem) {
-        let movements = new pf.Movements(bot);
+        let movements = getMovements(bot);
         movements.canDig = false;
-        bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 1));
+        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 1), { movements });
         await new Promise(resolve => setTimeout(resolve, 200));
         let prev = nearestItem;
         nearestItem = getNearestItem(bot);
@@ -583,11 +582,9 @@ export async function breakBlockAt(bot, x, y, z) {
 
         if (bot.entity.position.distanceTo(block.position) > 4.5) {
             let pos = block.position;
-            let movements = new pf.Movements(bot);
-            movements.canPlaceOn = false;
+            let movements = getMovements(bot);
             movements.allow1by1towers = false;
-            bot.pathfinder.setMovements(movements);
-            await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+            await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4), { movements });
         }
         if (bot.game.gameMode !== 'creative') {
             await bot.tool.equipForBlock(block);
@@ -764,8 +761,6 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
     if (bot.entity.position.distanceTo(targetBlock.position) > 4.5) {
         // too far
         let pos = targetBlock.position;
-        let movements = new pf.Movements(bot);
-        bot.pathfinder.setMovements(movements);
         await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
     }
 
@@ -1067,49 +1062,286 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
     return false;
 }
 
-export async function goToGoal(bot, goal) {
+// 'path_reset' reasons that mean the bot is physically blocked rather than simply replanning.
+// the pathfinder retries these silently and forever, so goto() can hang indefinitely.
+const BLOCKED_RESET_REASONS = new Set(['stuck', 'dig_error', 'place_error', 'no_scaffolding_blocks']);
+
+// positions where navigation recently failed, penalized so that replanning routes around them
+const STUCK_SPOT_TTL = 120000;
+const STUCK_SPOT_RADIUS = 2;
+const STUCK_SPOT_COST = 40;
+const MAX_STUCK_SPOTS = 16;
+let _stuck_spots = [];
+
+function penalizeStuckSpot(pos) {
+    _stuck_spots = _stuck_spots.filter(spot => Date.now() - spot.time < STUCK_SPOT_TTL);
+    _stuck_spots.push({ pos: pos.floored(), time: Date.now() });
+    if (_stuck_spots.length > MAX_STUCK_SPOTS) _stuck_spots.shift();
+}
+
+function stuckSpotCost(block) {
+    if (!block || !block.position) return 0;
+    let cost = 0;
+    for (const spot of _stuck_spots) {
+        if (Date.now() - spot.time > STUCK_SPOT_TTL) continue;
+        if (spot.pos.distanceTo(block.position) <= STUCK_SPOT_RADIUS) cost += STUCK_SPOT_COST;
+    }
+    return cost;
+}
+
+export function getMovements(bot, options={}) {
     /**
-     * Navigate to the given goal. Use doors and attempt minimally destructive movements.
+     * Build a pathfinder movements config that avoids recently failed spots.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {object} options, {destructive, parkour, sprint, cant_break}.
+     * @returns {pf.Movements} the movements config.
+     **/
+    const { destructive = true, parkour = true, sprint = true, cant_break = [] } = options;
+    const movements = new pf.Movements(bot);
+    if (!destructive) {
+        for (let block of ['glass', 'glass_pane']) {
+            movements.blocksCantBreak.add(mc.getBlockId(block));
+        }
+        movements.placeCost = 2;
+        movements.digCost = 10;
+    }
+    for (let block_id of cant_break) {
+        movements.blocksCantBreak.add(block_id);
+    }
+    movements.allowParkour = parkour;
+    movements.allowSprinting = sprint;
+    if (movements.countScaffoldingItems() === 0) {
+        // without blocks to tower back up with, a long drop is a one way trip
+        movements.maxDropDown = 3;
+    }
+    movements.exclusionAreasStep.push(stuckSpotCost);
+    return movements;
+}
+
+async function gotoMonitored(bot, goal, options={}) {
+    /**
+     * Run pathfinder.goto with a watchdog, since the pathfinder retries a blocked path
+     * forever and its promise would otherwise never settle.
+     * @returns {Promise<object>} {reached, reason, err, undiggable}.
+     **/
+    const max_blocked_resets = options.max_blocked_resets ?? 3;
+    const no_progress_ms = options.no_progress_ms ?? 15000;
+    const max_dig_ms = options.max_dig_ms ?? 60000;
+
+    let finished = false;
+    let settleWatchdog = null;
+    const watchdog = new Promise(resolve => { settleWatchdog = resolve; });
+
+    const abort = (reason, undiggable=null) => {
+        if (finished) return;
+        finished = true;
+        // actually halt the bot, which also settles the underlying goto promise
+        bot.pathfinder.stop();
+        bot.pathfinder.setGoal(null);
+        bot.clearControlStates();
+        settleWatchdog({ reached: false, reason, undiggable });
+    };
+
+    let blocked_resets = 0;
+    let last_pos = bot.entity.position.clone();
+    let last_progress = Date.now();
+
+    const onPathReset = (reason) => {
+        if (!BLOCKED_RESET_REASONS.has(reason)) return;
+        if (++blocked_resets >= max_blocked_resets) abort(`blocked (${reason})`);
+    };
+    bot.on('path_reset', onPathReset);
+
+    let dig_target = null;
+    let dig_start = 0;
+
+    const progressCheck = setInterval(() => {
+        const dig_block = bot.targetDigBlock;
+        if (dig_block) {
+            // never keep digging a block we have no tool for, it can never finish
+            if (bot.game.gameMode !== 'creative') {
+                const item_id = bot.heldItem ? bot.heldItem.type : null;
+                if (!dig_block.canHarvest(item_id)) {
+                    bot.stopDigging();
+                    abort(`cannot break ${dig_block.name} with current tools`, dig_block.type);
+                    return;
+                }
+            }
+            if (!dig_target || !dig_target.position.equals(dig_block.position)) {
+                dig_target = dig_block;
+                dig_start = Date.now();
+            }
+            else if (Date.now() - dig_start > max_dig_ms) {
+                bot.stopDigging();
+                abort(`stuck digging ${dig_block.name}`);
+                return;
+            }
+            // digging clears the way, so it counts as progress even while standing still
+            last_progress = Date.now();
+            return;
+        }
+        dig_target = null;
+        const pos = bot.entity.position;
+        if (pos.distanceTo(last_pos) > 1) {
+            last_pos = pos.clone();
+            last_progress = Date.now();
+            blocked_resets = 0; // moving again, forgive earlier failures
+        }
+        else if (Date.now() - last_progress > no_progress_ms) {
+            abort('no progress');
+        }
+    }, 500);
+
+    const navigation = bot.pathfinder.goto(goal).then(
+        () => { finished = true; return { reached: true }; },
+        (err) => { finished = true; return { reached: false, reason: err.message, err }; }
+    );
+
+    try {
+        return await Promise.race([navigation, watchdog]);
+    } finally {
+        clearInterval(progressCheck);
+        bot.removeListener('path_reset', onPathReset);
+    }
+}
+
+export async function goToGoal(bot, goal, options={}) {
+    /**
+     * Navigate to the given goal. Use doors, attempt minimally destructive movements,
+     * and recover and retry instead of hanging when the bot gets physically stuck.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {pf.goals.Goal} goal, the goal to navigate to.
+     * @param {object} options, {movements, max_attempts} plus any gotoMonitored option.
+     * @returns {Promise<boolean>} true if the goal was reached, false otherwise.
      **/
+    const max_attempts = options.max_attempts ?? 3;
+    const monitor_options = {
+        no_progress_ms: options.no_progress_ms,
+        max_dig_ms: options.max_dig_ms,
+        max_blocked_resets: options.max_blocked_resets,
+    };
+    let movements = options.movements;
+    let cant_break = [];
 
-    const nonDestructiveMovements = new pf.Movements(bot);
-    const dontBreakBlocks = ['glass', 'glass_pane'];
-    for (let block of dontBreakBlocks) {
-        nonDestructiveMovements.blocksCantBreak.add(mc.getBlockId(block));
-    }
-    nonDestructiveMovements.placeCost = 2;
-    nonDestructiveMovements.digCost = 10;
-
-    const destructiveMovements = new pf.Movements(bot);
-
-    let final_movements = destructiveMovements;
-
-    const pathfind_timeout = 1000;
-    if (await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathfind_timeout).status === 'success') {
-        final_movements = nonDestructiveMovements;
-        log(bot, `Found non-destructive path.`);
-    }
-    else if (await bot.pathfinder.getPathTo(destructiveMovements, goal, pathfind_timeout).status === 'success') {
-        log(bot, `Found destructive path.`);
-    }
-    else {
-        log(bot, `Path not found, but attempting to navigate anyway using destructive movements.`);
+    if (!movements) {
+        const pathfind_timeout = 1000;
+        const non_destructive = getMovements(bot, { destructive: false });
+        if (bot.pathfinder.getPathTo(non_destructive, goal, pathfind_timeout).status === 'success') {
+            movements = non_destructive;
+            log(bot, `Found non-destructive path.`);
+        }
+        else {
+            movements = getMovements(bot);
+            if (bot.pathfinder.getPathTo(movements, goal, pathfind_timeout).status === 'success')
+                log(bot, `Found destructive path.`);
+            else
+                log(bot, `Path not found, but attempting to navigate anyway using destructive movements.`);
+        }
     }
 
     const doorCheckInterval = startDoorInterval(bot);
-
-    bot.pathfinder.setMovements(final_movements);
     try {
-        await bot.pathfinder.goto(goal);
+        for (let attempt = 1; attempt <= max_attempts; attempt++) {
+            bot.pathfinder.setMovements(movements);
+            const result = await gotoMonitored(bot, goal, monitor_options);
+            if (result.reached) return true;
+            if (bot.interrupt_code) return false;
+            if (result.err) {
+                // the goal itself is gone or unreachable, retrying the same goal won't help
+                if (result.err.name === 'GoalChanged') throw result.err;
+                log(bot, `Navigation failed: ${result.reason}.`);
+                return false;
+            }
+            if (result.undiggable != null && !cant_break.includes(result.undiggable)) {
+                cant_break.push(result.undiggable);
+            }
+            if (attempt === max_attempts) {
+                log(bot, `Gave up navigating after ${attempt} attempts, last failure: ${result.reason}.`);
+                return false;
+            }
+            log(bot, `Navigation attempt ${attempt} failed (${result.reason}), recovering and retrying.`);
+            // remember where we failed so replanning routes around it, then free the bot
+            // physically before retrying with more conservative movements
+            penalizeStuckSpot(bot.entity.position);
+            await getUnstuck(bot);
+            if (bot.interrupt_code) return false;
+            movements = getMovements(bot, { parkour: false, sprint: false, cant_break });
+        }
+        return false;
+    } finally {
         clearInterval(doorCheckInterval);
-        return true;
-    } catch (err) {
-        clearInterval(doorCheckInterval);
-        // we need to catch so we can clean up the door check interval, then rethrow the error
-        throw err;
     }
+}
+
+export async function getUnstuck(bot, attempts=3) {
+    /**
+     * Try to physically free the bot without using the pathfinder: stop, jump, strafe in
+     * random directions, and dig an escape route if boxed in.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} attempts, how many times to try. Defaults to 3.
+     * @returns {Promise<boolean>} true if the bot moved, false otherwise.
+     * @example
+     * await skills.getUnstuck(bot);
+     **/
+    const start = bot.entity.position.clone();
+    bot.pathfinder.stop();
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+
+    const directions = ['forward', 'back', 'left', 'right'];
+    for (let i = 0; i < attempts; i++) {
+        if (bot.interrupt_code) break;
+        await bot.look(Math.random() * Math.PI * 2, 0, true);
+        const direction = directions[Math.floor(Math.random() * directions.length)];
+        bot.setControlState('jump', true);
+        bot.setControlState('sprint', i > 0);
+        bot.setControlState(direction, true);
+        await new Promise(resolve => setTimeout(resolve, 600));
+        bot.clearControlStates();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (bot.entity.position.distanceTo(start) > 1) {
+            log(bot, `Got unstuck by moving ${direction}.`);
+            return true;
+        }
+        await digEscapeRoute(bot);
+    }
+    bot.clearControlStates();
+    const moved = bot.entity.position.distanceTo(start) > 1;
+    if (!moved) log(bot, `Could not get unstuck at ${start.floored()}.`);
+    return moved;
+}
+
+async function digEscapeRoute(bot) {
+    /**
+     * Break the blocks boxing the bot in, in front of it first and then above it.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if a block was broken, false otherwise.
+     **/
+    const pos = bot.entity.position;
+    const dx = Math.round(-Math.sin(bot.entity.yaw));
+    const dz = Math.round(-Math.cos(bot.entity.yaw));
+    const candidates = [
+        pos.offset(dx, 0, dz), // in front, at feet
+        pos.offset(dx, 1, dz), // in front, at head
+        pos.offset(0, 2, 0),   // straight up
+    ];
+    for (let position of candidates) {
+        const block = bot.blockAt(position);
+        if (!block || !block.diggable || block.name === 'air') continue;
+        try {
+            if (bot.game.gameMode !== 'creative') {
+                await bot.tool.equipForBlock(block);
+                const item_id = bot.heldItem ? bot.heldItem.type : null;
+                if (!block.canHarvest(item_id)) continue;
+            }
+            await bot.dig(block, true);
+            log(bot, `Dug through ${block.name} to escape.`);
+            return true;
+        } catch (err) {
+            // block may be out of reach or protected, try the next one
+        }
+    }
+    return false;
 }
 
 let _doorInterval = null;
@@ -1201,23 +1433,8 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
         return true;
     }
     
-    const checkDigProgress = () => {
-        if (bot.targetDigBlock) {
-            const targetBlock = bot.targetDigBlock;
-            const itemId = bot.heldItem ? bot.heldItem.type : null;
-            if (!targetBlock.canHarvest(itemId)) {
-                log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
-                bot.pathfinder.stop();
-                bot.stopDigging();
-            }
-        }
-    };
-    
-    const progressInterval = setInterval(checkDigProgress, 1000);
-    
     try {
         await goToGoal(bot, new pf.goals.GoalNear(x, y, z, min_distance));
-        clearInterval(progressInterval);
         const distance = bot.entity.position.distanceTo(new Vec3(x, y, z));
         if (distance <= min_distance+1) {
             log(bot, `You have reached at ${x}, ${y}, ${z}.`);
@@ -1229,7 +1446,6 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
         }
     } catch (err) {
         log(bot, `Pathfinding stopped: ${err.message}.`);
-        clearInterval(progressInterval);
         return false;
     }
 }
@@ -1322,9 +1538,13 @@ export async function goToPlayer(bot, username, distance=3) {
     distance = Math.max(distance, 0.5);
     const goal = new pf.goals.GoalFollow(player, distance);
 
-    await goToGoal(bot, goal, true);
-
+    const reached = await goToGoal(bot, goal);
+    if (!reached) {
+        log(bot, `Could not reach ${username}.`);
+        return false;
+    }
     log(bot, `You have reached ${username}.`);
+    return true;
 }
 
 
@@ -1403,14 +1623,13 @@ export async function moveAway(bot, distance) {
      * @example
      * await skills.moveAway(bot, 8);
      **/
-    const pos = bot.entity.position;
+    const pos = bot.entity.position.clone();
     let goal = new pf.goals.GoalNear(pos.x, pos.y, pos.z, distance);
     let inverted_goal = new pf.goals.GoalInvert(goal);
-    bot.pathfinder.setMovements(new pf.Movements(bot));
 
     if (bot.modes.isOn('cheat')) {
-        const move = new pf.Movements(bot);
-        const path = await bot.pathfinder.getPathTo(move, inverted_goal, 10000);
+        const move = getMovements(bot);
+        const path = bot.pathfinder.getPathTo(move, inverted_goal, 10000);
         let last_move = path.path[path.path.length-1];
         if (last_move) {
             let x = Math.floor(last_move.x);
@@ -1423,6 +1642,10 @@ export async function moveAway(bot, distance) {
 
     await goToGoal(bot, inverted_goal);
     let new_pos = bot.entity.position;
+    if (new_pos.distanceTo(pos) < 1) {
+        log(bot, `Could not move away from ${pos.floored()}.`);
+        return false;
+    }
     log(bot, `Moved away from ${pos.floored()} to ${new_pos.floored()}.`);
     return true;
 }
