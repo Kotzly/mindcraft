@@ -150,6 +150,7 @@ const modes_list = [
         active: false,
         prev_location: null,
         distance: 2,
+        water_distance: 5,
         stuck_time: 0,
         last_time: Date.now(),
         max_stuck_time: 20,
@@ -167,7 +168,10 @@ const modes_list = [
             if (cur_dig_block && !this.prev_dig_block) {
                 this.prev_dig_block = cur_dig_block;
             }
-            if (this.prev_location && this.prev_location.distanceTo(bot.entity.position) < this.distance && cur_dig_block == this.prev_dig_block) {
+            // a current pushes a swimming bot back and forth, so allow more drift before it counts as moving
+            const in_water = skills.isInWater(bot);
+            const distance = in_water ? this.water_distance : this.distance;
+            if (this.prev_location && this.prev_location.distanceTo(bot.entity.position) < distance && cur_dig_block == this.prev_dig_block) {
                 this.stuck_time += (Date.now() - this.last_time) / 1000;
             }
             else {
@@ -186,7 +190,11 @@ const modes_list = [
                 // it is bounded by the action timeout instead of killing the process on a timer,
                 // since restarting respawns the bot in the same place it was stuck in
                 execute(this, agent, async () => {
-                    let freed = await skills.getUnstuck(bot);
+                    let freed = false;
+                    if (skills.isInWater(bot)) {
+                        freed = await skills.escapeWater(bot);
+                    }
+                    if (!freed) freed = await skills.getUnstuck(bot);
                     if (!freed) {
                         await skills.moveAway(bot, 5);
                         freed = bot.entity.position.distanceTo(stuck_pos) > this.distance;
@@ -198,7 +206,7 @@ const modes_list = [
                     }
                     this.failed_recoveries++;
                     say(agent, `I couldn't get free (attempt ${this.failed_recoveries}).`);
-                    await agent.history.add('system', `You are stuck at ${stuck_pos.floored()} and ${this.failed_recoveries} automatic recovery attempts failed. You are likely trapped. Try digging out with !digDown, placing blocks to climb out, or travelling in a different direction.`);
+                    await agent.history.add('system', `You are stuck at ${stuck_pos.floored()} and ${this.failed_recoveries} automatic recovery attempts failed. You are likely trapped. If you are in water, try !getUnstuck to swim to shore. Otherwise try digging out with !digDown, placing blocks to climb out, or travelling in a different direction.`);
                     if (this.failed_recoveries >= this.max_recoveries) {
                         agent.cleanKill('Stuck and unable to recover after repeated attempts.');
                     }

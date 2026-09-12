@@ -160,9 +160,10 @@ export const actionsList = [
     },
     {
         name: '!getUnstuck',
-        description: 'Try to free yourself when trapped: jump and strafe around, and dig out if boxed in.',
+        description: 'Try to free yourself when trapped: swim to the nearest shore if in water, otherwise jump and strafe around, and dig out if boxed in.',
         params: {},
         perform: runAsAction(async (agent) => {
+            if (skills.isInWater(agent.bot) && await skills.escapeWater(agent.bot)) return;
             await skills.getUnstuck(agent.bot);
         })
     },

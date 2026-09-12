@@ -1089,6 +1089,7 @@ const STUCK_SPOT_TTL = 120000;
 const STUCK_SPOT_RADIUS = 2;
 const STUCK_SPOT_COST = 40;
 const MAX_STUCK_SPOTS = 16;
+const FLOWING_WATER_COST = 10;
 let _stuck_spots = [];
 
 function penalizeStuckSpot(pos) {
@@ -1133,6 +1134,9 @@ export function getMovements(bot, options={}) {
         movements.maxDropDown = 3;
     }
     movements.exclusionAreasStep.push(stuckSpotCost);
+    // the pathfinder does not model currents, so moving water sweeps the bot off its path
+    movements.exclusionAreasStep.push(block => isFlowingWater(block) ? FLOWING_WATER_COST : 0);
+    movements.liquidCost = 3;
     // >= 100 makes Movements.canDig() refuse the block outright, not just discourage it
     movements.exclusionAreasBreak.push(block => isProtected(block.position) ? 100 : 0);
     return movements;
@@ -1165,6 +1169,7 @@ async function gotoMonitored(bot, goal, options={}) {
     let blocked_resets = 0;
     let last_pos = bot.entity.position.clone();
     let last_progress = Date.now();
+    let best_heuristic = Infinity;
 
     const onPathReset = (reason) => {
         if (!BLOCKED_RESET_REASONS.has(reason)) return;
@@ -1202,7 +1207,14 @@ async function gotoMonitored(bot, goal, options={}) {
         }
         dig_target = null;
         const pos = bot.entity.position;
-        if (pos.distanceTo(last_pos) > 1) {
+        // in water the current moves the bot around, so only getting closer to the goal counts
+        let moved = pos.distanceTo(last_pos) > 1;
+        if (moved && typeof goal.heuristic === 'function') {
+            const h = goal.heuristic(pos.floored());
+            if (isInWater(bot) && h > best_heuristic - 1) moved = false;
+            best_heuristic = Math.min(best_heuristic, h);
+        }
+        if (moved) {
             last_pos = pos.clone();
             last_progress = Date.now();
             blocked_resets = 0; // moving again, forgive earlier failures
@@ -1283,7 +1295,8 @@ export async function goToGoal(bot, goal, options={}) {
             // remember where we failed so replanning routes around it, then free the bot
             // physically before retrying with more conservative movements
             penalizeStuckSpot(bot.entity.position);
-            await getUnstuck(bot);
+            if (isInWater(bot)) await escapeWater(bot);
+            else await getUnstuck(bot);
             if (bot.interrupt_code) return false;
             movements = getMovements(bot, { parkour: false, sprint: false, cant_break });
         }
@@ -1329,6 +1342,131 @@ export async function getUnstuck(bot, attempts=3) {
     const moved = bot.entity.position.distanceTo(start) > 1;
     if (!moved) log(bot, `Could not get unstuck at ${start.floored()}.`);
     return moved;
+}
+
+function isWaterBlock(block) {
+    return !!block && (block.name === 'water' || block.name === 'bubble_column' ||
+        block.getProperties?.().waterlogged === true);
+}
+
+function isFlowingWater(block) {
+    // source blocks are level 0, anything else is moving water that pushes entities
+    if (!block || block.name !== 'water') return false;
+    const level = block.getProperties?.().level ?? block.metadata;
+    return level !== undefined && level !== 0;
+}
+
+export function isInWater(bot) {
+    /**
+     * Whether the bot is currently in water.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {boolean} true if the bot is in water.
+     **/
+    if (bot.entity.isInWater) return true;
+    const pos = bot.entity.position;
+    return isWaterBlock(bot.blockAt(pos)) || isWaterBlock(bot.blockAt(pos.offset(0, 1, 0)));
+}
+
+function isDryStandable(bot, pos) {
+    const ground = bot.blockAt(pos.offset(0, -1, 0));
+    const feet = bot.blockAt(pos);
+    const head = bot.blockAt(pos.offset(0, 1, 0));
+    if (!ground || !feet || !head) return false;
+    if (ground.boundingBox !== 'block' || isWaterBlock(ground) || ground.name === 'lava') return false;
+    for (const b of [feet, head]) {
+        if (b.boundingBox !== 'empty' || isWaterBlock(b) || b.name === 'lava') return false;
+    }
+    return true;
+}
+
+export async function escapeWater(bot, range=16, timeout_ms=30000) {
+    /**
+     * Swim out of water, including fast-flowing rivers, onto the nearest dry land. Holds jump
+     * to stay at the surface, swims against the current towards the bank and climbs out.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} range, how far to look for land. Defaults to 16.
+     * @param {number} timeout_ms, how long to try before giving up. Defaults to 30000.
+     * @returns {Promise<boolean>} true if the bot is out of the water, false otherwise.
+     * @example
+     * await skills.escapeWater(bot);
+     **/
+    if (!isInWater(bot)) return true;
+    bot.pathfinder.stop();
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+
+    const tried = [];
+    const findLand = () => {
+        const origin = bot.entity.position;
+        const grounds = bot.findBlocks({
+            matching: block => block.boundingBox === 'block' && !isWaterBlock(block),
+            useExtraInfo: block => isDryStandable(bot, block.position.offset(0, 1, 0)),
+            maxDistance: range,
+            count: 64,
+        });
+        let best = null;
+        let best_cost = Infinity;
+        for (const ground of grounds) {
+            const spot = ground.offset(0, 1, 0);
+            if (tried.some(t => t.distanceTo(spot) < 2)) continue;
+            // swimming bots can only climb a bank about one block above the water line
+            const rise = spot.y - Math.floor(origin.y);
+            if (rise > 1) continue;
+            const cost = origin.distanceTo(spot.offset(0.5, 0, 0.5)) + Math.max(0, -rise) * 0.5;
+            if (cost < best_cost) {
+                best_cost = cost;
+                best = spot;
+            }
+        }
+        return best;
+    };
+
+    const start = Date.now();
+    let target = findLand();
+    if (!target) log(bot, `No dry land within ${range} blocks, swimming to look for some.`);
+    let best_dist = Infinity;
+    let last_improvement = Date.now();
+    try {
+        while (Date.now() - start < timeout_ms) {
+            if (bot.interrupt_code) return false;
+            if (!isInWater(bot) && bot.entity.onGround) {
+                log(bot, `Got out of the water at ${bot.entity.position.floored()}.`);
+                return true;
+            }
+            // jump keeps the head above water and climbs the bank, sprint swims against the current
+            bot.setControlState('jump', true);
+            bot.setControlState('forward', true);
+            bot.setControlState('sprint', true);
+            if (!target) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                target = findLand();
+                continue;
+            }
+            const aim = target.offset(0.5, 0.5, 0.5);
+            await bot.lookAt(aim, true);
+            await new Promise(resolve => setTimeout(resolve, 250));
+
+            const pos = bot.entity.position;
+            const dist = Math.hypot(pos.x - aim.x, pos.z - aim.z);
+            if (dist < best_dist - 0.3) {
+                best_dist = dist;
+                last_improvement = Date.now();
+            }
+            else if (Date.now() - last_improvement > 4000) {
+                // the current is winning or the bank is too high, try another spot
+                log(bot, `Can't reach the bank at ${target}, trying another spot.`);
+                tried.push(target);
+                target = findLand();
+                best_dist = Infinity;
+                last_improvement = Date.now();
+            }
+        }
+    } finally {
+        bot.clearControlStates();
+    }
+    const out = !isInWater(bot);
+    if (!out) log(bot, `Could not get out of the water at ${bot.entity.position.floored()}.`);
+    return out;
 }
 
 async function digEscapeRoute(bot) {
