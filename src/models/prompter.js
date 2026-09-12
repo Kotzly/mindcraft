@@ -118,8 +118,9 @@ export class Prompter {
 
     async initExamples() {
         try {
-            this.convo_examples = new Examples(this.embedding_model, settings.num_examples);
-            this.coding_examples = new Examples(this.embedding_model, settings.num_examples);
+            const num_examples = this.profile.num_examples !== undefined ? this.profile.num_examples : settings.num_examples;
+            this.convo_examples = new Examples(this.embedding_model, num_examples);
+            this.coding_examples = new Examples(this.embedding_model, num_examples);
             
             // Wait for both examples to load before proceeding
             await Promise.all([
