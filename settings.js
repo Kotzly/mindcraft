@@ -5,13 +5,13 @@ const settings = {
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
-    "mindserver_host": "192.168.0.166",
+    "mindserver_host": "localhost",
     "mindserver_port": 8080,
     "auto_open_ui": true, // opens UI in browser on startup
     
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
-        // "./andy.json",
+        "./andy.json",
         // "./profiles/gpt.json",
         // "./profiles/claude.json",
         // "./profiles/claude-cli.json", // uses the local `claude` CLI login instead of an API key
@@ -26,7 +26,7 @@ const settings = {
 
         // "./profiles/claude-cli.json",
         // "./profiles/andy-haiku.json",
-        "./profiles/haiku.json",
+        // "./profiles/haiku.json",
         // "./profiles/andy4-haiku.json", // Andy-4 8B (ollama) + haiku for code
         // "./profiles/andy42air-ollama-haiku.json", // Andy-4.2-Air (ollama) + haiku for code
         // "./profiles/andy42air-lmstudio-haiku.json", // Andy-4.2-Air (LM Studio server) + haiku for code
@@ -40,9 +40,8 @@ const settings = {
     "init_message": "Respond with hello world and your name", // sends to all on spawn
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
-    // "speak": false,
-    "speak": "system",
-    // allows all bots to speak through text-to-speech. 
+    "speak": false,
+    // allows all bots to speak through text-to-speech.
     // specify speech model inside each profile with format: {provider}/{model}/{voice}.
     // if set to "system" it will use basic system text-to-speech. 
     // Works on windows and mac, but linux requires you to install the espeak package through your package manager eg: `apt install espeak` `pacman -S espeak`.
@@ -51,7 +50,7 @@ const settings = {
     "language": "en", // translate to/from this language. Supports these language names: https://cloud.google.com/translate/docs/languages
     "render_bot_view": true, // show bot's view in browser at localhost:3000, 3001...
 
-    "allow_insecure_coding": true, // allows newAction command and model can write/run code on your computer. enable at own risk
+    "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
     "allow_vision": false, // allows vision model to interpret screenshots as inputs
     "blocked_actions" : ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"] , // commands to disable and remove from docs. Ex: ["!setMode"]
     "code_timeout_mins": 5, // minutes code is allowed to run. -1 for no timeout
@@ -71,5 +70,13 @@ const settings = {
     "todo_list": true, // goals keep a todo list in the prompt and get an automatic plan
     "log_all_prompts": false, // log ALL prompts to file
 };
+
+// optional untracked overrides for personal/local values (mindserver_host, profiles, etc.)
+try {
+    const local = (await import('./settings.local.js')).default;
+    Object.assign(settings, local);
+} catch (err) {
+    if (err.code !== 'ERR_MODULE_NOT_FOUND') throw err;
+}
 
 export default settings;

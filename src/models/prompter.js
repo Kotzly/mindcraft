@@ -206,7 +206,7 @@ export class Prompter {
             prompt = prompt.replaceAll('$LAST_GOALS', goal_text.trim());
         }
         if (prompt.includes('$BLUEPRINTS')) {
-            if (this.agent.npc.constructions) {
+            if (this.agent.npc?.constructions) {
                 let blueprints = '';
                 for (let blueprint in this.agent.npc.constructions) {
                     blueprints += blueprint + ', ';

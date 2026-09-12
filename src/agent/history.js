@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
 import { NPCData } from './npc/data.js';
 import settings from './settings.js';
 
@@ -50,16 +50,13 @@ export class History {
     async appendFullHistory(to_store) {
         if (this.full_history_fp === undefined) {
             const string_timestamp = new Date().toLocaleString().replace(/[/:]/g, '-').replace(/ /g, '').replace(/,/g, '_');
-            this.full_history_fp = `./bots/${this.name}/histories/${string_timestamp}.json`;
-            writeFileSync(this.full_history_fp, '[]', 'utf8');
+            this.full_history_fp = `./bots/${this.name}/histories/${string_timestamp}.jsonl`;
         }
         try {
-            const data = readFileSync(this.full_history_fp, 'utf8');
-            let full_history = JSON.parse(data);
-            full_history.push(...to_store);
-            writeFileSync(this.full_history_fp, JSON.stringify(full_history, null, 4), 'utf8');
+            const lines = to_store.map(turn => JSON.stringify(turn)).join('\n') + '\n';
+            appendFileSync(this.full_history_fp, lines, 'utf8');
         } catch (err) {
-            console.error(`Error reading ${this.name}'s full history file: ${err.message}`);
+            console.error(`Error writing ${this.name}'s full history file: ${err.message}`);
         }
     }
 

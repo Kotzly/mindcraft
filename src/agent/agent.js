@@ -43,7 +43,7 @@ export class Agent {
         
         this.history = new History(this);
         this.coder = new Coder(this);
-        this.npc = new NPCContoller(this);
+        this.npc = this.prompter.profile.npc ? new NPCContoller(this) : null;
         this.memory_bank = new MemoryBank();
         this.todo = new TodoList();
         this.command_history = [];
@@ -540,7 +540,7 @@ export class Agent {
         });
 
         // Init NPC controller
-        this.npc.init();
+        if (this.npc) this.npc.init();
 
         // This update loop ensures that each update() is called one at a time, even if it takes longer than the interval
         const INTERVAL = 300;
@@ -578,6 +578,7 @@ export class Agent {
         process.exit(code);
     }
     async checkTaskDone() {
+        if (!settings.task) return;
         if (this.task.data) {
             let res = this.task.isDone();
             if (res) {

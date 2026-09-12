@@ -1,10 +1,11 @@
-import { readFileSync , writeFileSync, existsSync} from 'fs';
+import { readFileSync , writeFileSync, existsSync, mkdirSync} from 'fs';
 import { executeCommand } from '../commands/index.js';
 import { getPosition } from '../library/world.js';
 import { ConstructionTaskValidator, Blueprint } from './construction_tasks.js';
 import { CookingTaskInitiator } from './cooking_tasks.js';
 
-const PROGRESS_FILE = './hells_kitchen_progress.json';
+const PROGRESS_DIR = './bots/_shared';
+const PROGRESS_FILE = `${PROGRESS_DIR}/hells_kitchen_progress.json`;
 
 const hellsKitchenProgressManager = {
   readProgress: function() {
@@ -21,6 +22,7 @@ const hellsKitchenProgressManager = {
   
   writeProgress: function(progress) {
     try {
+      mkdirSync(PROGRESS_DIR, { recursive: true });
       writeFileSync(PROGRESS_FILE, JSON.stringify(progress), 'utf8');
     } catch (err) {
       console.error('Error writing progress file:', err);
