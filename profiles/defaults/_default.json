@@ -38,7 +38,7 @@
             {"role": "user", "content": "john_goodman: (FROM OTHER BOT)Hey there! What's up?"},
             {"role": "assistant", "content": "Hey John, not much. Just saying hi."},
             {"role": "user", "content": "john_goodman: (FROM OTHER BOT)Bye!"},
-            {"role": "assistant", "content": "Bye! !endConversation('john_goodman')"}
+            {"role": "assistant", "content": "Bye! !endConversation(\"john_goodman\")"}
         ],
 
         [
@@ -57,12 +57,12 @@
         [
             {"role": "user", "content": "rupert: (FROM OTHER BOT)Let's collaborate to build a house!"},
             {"role": "assistant", "content": "Sure! I'll share information to help coordinate. Let's center the build at x:942, y:54, z:1355 !newAction(\"Build a 10x10 base of a house at location\")"},
-            {"role": "user", "content": "rupert: (FROM OTHER BOT)Alright, I'll build the walls! !newAction('Build a 10x10 wall of a house at the same location')"}
+            {"role": "user", "content": "rupert: (FROM OTHER BOT)Alright, I'll build the walls! !newAction(\"Build a 10x10 wall of a house at the same location\")"}
         ],
 
         [
             {"role": "user", "content": "gort: (FROM OTHER BOT)Let's do it, onward!"},
-            {"role": "assistant", "content": "Alright, I'll start by getting some cobblestone. !collectBlocks('stone', 10)"}
+            {"role": "assistant", "content": "Alright, I'll start by getting some cobblestone. !collectBlocks(\"stone\", 10)"}
         ],
 
         [
@@ -193,14 +193,14 @@
             {"role": "system", "content": "You are self-prompting with the goal: \"Get a wooden pickaxe\". Respond:"},
             {"role": "assistant", "content": "What's around me? !nearbyBlocks"},
             {"role": "system", "content": "NEARBY_BLOCKS\n- oak_log\n- dirt\n- cobblestone"},
-            {"role": "assistant", "content": "I see some oak logs, dirt, and cobblestone nearby. My goal is to craft a wooden pickaxe. I'll start by collecting some wood. !collectBlock(\"oak_log\", 10)"},
+            {"role": "assistant", "content": "I see some oak logs, dirt, and cobblestone nearby. My goal is to craft a wooden pickaxe. I'll start by collecting some wood. !collectBlocks(\"oak_log\", 10)"},
             {"role": "system", "content": "Successfully collected 9 wood."},
-            {"role": "assistant", "content": "I collected 9 oak logs. I need a pickaxe first, which requires planks and sticks. !craftItem(\"oak_plank\", 9)"},
-            {"role": "system", "content": "Successfully crafted 9 oak_planks."},
-            {"role": "assistant", "content": "I have crafted 9 oak planks. Now I need sticks. !craftItem(\"stick\", 2)"},
-            {"role": "system", "content": "Successfully crafted 2 sticks."},
-            {"role": "assistant", "content": "I have crafted 2 sticks. Now I can craft a wooden pickaxe. !craftItem(\"wooden_pickaxe\", 1)"},
-            {"role": "system", "content": "Successfully crafted 1 wooden_pickaxe."},
+            {"role": "assistant", "content": "I collected 9 oak logs. I need a pickaxe first, which requires planks and sticks. !craftRecipe(\"oak_planks\", 3)"},
+            {"role": "system", "content": "Successfully crafted oak_planks, total of 12 oak_planks."},
+            {"role": "assistant", "content": "I have crafted 9 oak planks. Now I need sticks. !craftRecipe(\"stick\", 1)"},
+            {"role": "system", "content": "Successfully crafted stick, total of 4 sticks."},
+            {"role": "assistant", "content": "I have crafted 2 sticks. Now I can craft a wooden pickaxe. !craftRecipe(\"wooden_pickaxe\", 1)"},
+            {"role": "system", "content": "Successfully crafted wooden_pickaxe, total of 1 wooden_pickaxe."},
             {"role": "assistant", "content": "Looks like I have a wooden pickaxe now! Goal accomplished. !endGoal"}
         ],
         [

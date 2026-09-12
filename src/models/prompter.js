@@ -1,6 +1,6 @@
 import { readFileSync, mkdirSync, writeFileSync} from 'fs';
 import { Examples } from '../utils/examples.js';
-import { getCommandDocs } from '../agent/commands/index.js';
+import { getCommandDocs, containsCommand, commandExists } from '../agent/commands/index.js';
 import { SkillLibrary } from "../agent/library/skill_library.js";
 import { stringifyTurns } from '../utils/text.js';
 import { getCommand } from '../agent/commands/index.js';
@@ -125,6 +125,26 @@ export class Prompter {
                 console.error('Stack trace:', error.stack);
                 throw error;
             });
+
+            // Validate examples for correct syntax and command existence
+            const validateExampleTurns = (turns) => {
+                for (const turn of turns) {
+                    if (turn.role === 'assistant') {
+                        const content = turn.content;
+                        // Check for single-quoted command args
+                        if (content.match(/!\w+\('/)) {
+                            console.warn('Example uses single-quoted command args:', content.substring(0, 50));
+                        }
+                        // Check if command exists
+                        const cmdName = containsCommand(content);
+                        if (cmdName && !commandExists(cmdName)) {
+                            console.warn('Example uses unknown command:', cmdName);
+                        }
+                    }
+                }
+            };
+            validateExampleTurns(this.profile.conversation_examples || []);
+            validateExampleTurns(this.profile.coding_examples || []);
 
             console.log('Examples initialized.');
         } catch (error) {
@@ -274,6 +294,10 @@ export class Prompter {
         let resp = await this.code_model.sendRequest(messages, prompt);
         this.awaiting_coding = false;
         await this._saveLog(prompt, messages, resp, 'coding');
+        if (resp?.includes('</think>')) {
+            const [_, afterThink] = resp.split('</think>')
+            resp = afterThink;
+        }
         return resp;
     }
 
