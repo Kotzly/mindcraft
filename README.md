@@ -45,6 +45,62 @@ Do not connect this bot to public servers with coding enabled. This project allo
 
 If you encounter issues, check the [FAQ](https://github.com/mindcraft-bots/mindcraft/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently not very responsive to github issues. To run tasks please refer to [Minecollab Instructions](minecollab.md#installation)
 
+# This fork
+
+This fork adds a few things on top of upstream mindcraft: a backend that runs through the local `claude` CLI, per-profile settings overrides, a todo list for goals, protected build regions, a usage/cost dashboard, and personal/local settings kept out of git. Everything else in this README applies as-is.
+
+## claude-cli backend
+
+`src/models/claude_cli.js` runs prompts through the `claude` CLI (`claude -p`) already logged into your Claude subscription, instead of an API key. Set it as a profile's model:
+
+```json
+"model": "claude-cli/haiku"
+```
+
+Optional params (on the model config's `params`):
+
+- `effort` - passed through as `--effort=<value>`.
+- `thinking: false` - disables extended thinking (sets `MAX_THINKING_TOKENS=0`).
+- `command` - the CLI executable to spawn (default `claude`).
+- `timeout_ms` - kill the CLI call after this long (default 180000).
+
+Each conversation/coding prompt keeps its own CLI session under `bots/_claude_cli`, resumed across calls with `--resume`; you can inspect one directly with `claude --resume <session id>` from that directory. `--resume` ignores mindcraft's own history trimming, so per-profile `max_messages`/`summary_chunk_size` (see `profiles/haiku.json`) bound how much real context the CLI session keeps.
+
+## Per-profile settings
+
+A profile can override `settings.js` for just that bot with a `"settings"` block:
+
+```json
+"settings": { "todo_list": false }
+```
+
+## Local settings
+
+Personal values (LAN `mindserver_host`, `allow_insecure_coding`, which profiles to run, `speak`, ...) belong in an untracked `settings.local.js` next to `settings.js`, which is merged over the checked-in defaults at startup if present:
+
+```js
+// settings.local.js (gitignored)
+export default {
+    "mindserver_host": "192.168.0.166",
+    "profiles": ["./profiles/haiku.json"],
+};
+```
+
+## Todo list
+
+When `settings.todo_list` is `true` (the default), a `!goal` keeps a todo list in the system prompt that the bot updates as it works: `!setTodo("step one; step two")`, `!addTodo("missing step")`, `!doneTodo(n)`. See [todo_tool.md](todo_tool.md) for the full design.
+
+## Protected regions
+
+`!protectRegion(name, corner1, corner2)`, `!unprotectRegion(name)`, and `!listProtectedRegions()` mark a box the bot won't dig into or place cheat-mode blocks in. Regions are shared by all bots via `bots/_shared/protected_regions.json`, and re-read whenever the file's mtime changes.
+
+## Usage and cost
+
+The dashboard shows accumulated tokens and estimated cost per model for each running agent (`src/utils/usage.js`).
+
+## LM Studio
+
+See [LMS.md](LMS.md) for running a local model through LM Studio's OpenAI-compatible server.
 
 # Configuration
 ## Model Customization
@@ -252,7 +308,7 @@ The `unstuck` mode in `src/agent/modes.js` is the outer safety net, triggering w
 
 ## Tuning
 
-Thresholds live as constants next to `goToGoal()` in `src/agent/library/skills.js` (`STUCK_SPOT_TTL`, `STUCK_SPOT_RADIUS`, `STUCK_SPOT_COST`) and as `gotoMonitored` options (`no_progress_ms`, `max_dig_ms`, `max_blocked_resets`), which `goToGoal()` accepts and forwards. The mode's `max_stuck_time` and `max_recoveries` are fields on the `unstuck` mode. On a laggy server, raise `no_progress_ms` before anything else.
+Thresholds live as constants next to `goToGoal()` in `src/agent/library/skills.js` (`STUCK_SPOT_TTL`, `STUCK_SPOT_RADIUS`, `STUCK_SPOT_COST`) and as `gotoMonitored` options (`no_progress_ms`, `max_dig_ms`, `max_blocked_resets`), which `goToGoal()` accepts and forwards. The mode's `max_stuck_time` and `max_recoveries` are fields on the `unstuck` mode. On a laggy server, raise `no_progress_ms` before anything else. The pathfinder movement options (parkour, sprinting, which blocks can be dug/placed) are also centralized in `skills.js`, in `getMovements()`.
 
 # Contributing
 
