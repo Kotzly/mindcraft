@@ -93,12 +93,8 @@ export class Prompter {
 
         this.skill_libary = new SkillLibrary(agent, this.embedding_model);
         mkdirSync(`./bots/${name}`, { recursive: true });
-        writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4), (err) => {
-            if (err) {
-                throw new Error('Failed to save profile:', err);
-            }
-            console.log("Copy profile saved.");
-        });
+        writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4));
+        console.log("Copy profile saved.");
     }
 
     getName() {
@@ -267,14 +263,20 @@ export class Prompter {
             return '```//no response```';
         }
         this.awaiting_coding = true;
-        await this.checkCooldown();
-        let prompt = this.profile.coding;
-        prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
+        try {
+            await this.checkCooldown();
+            let prompt = this.profile.coding;
+            prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
-        let resp = await this.code_model.sendRequest(messages, prompt);
-        this.awaiting_coding = false;
-        await this._saveLog(prompt, messages, resp, 'coding');
-        return resp;
+            let resp = await this.code_model.sendRequest(messages, prompt);
+            await this._saveLog(prompt, messages, resp, 'coding');
+            return resp;
+        } catch (error) {
+            console.error('Error in promptCoding:', error);
+            return '';
+        } finally {
+            this.awaiting_coding = false;
+        }
     }
 
     async promptMemSaving(to_summarize) {
