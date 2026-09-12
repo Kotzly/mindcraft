@@ -63,7 +63,7 @@ Optional params (on the model config's `params`; a top-level profile `params` ne
 - `command` - the CLI executable to spawn (default `claude`).
 - `timeout_ms` - kill the CLI call after this long (default 180000).
 
-Each conversation/coding prompt keeps its own CLI session under `bots/_claude_cli`, resumed across calls with `--resume`; you can inspect one directly with `claude --resume <session id>` from that directory. `--resume` ignores mindcraft's own history trimming, so per-profile `max_messages`/`summary_chunk_size` (see `profiles/haiku.json`) bound how much real context the CLI session keeps.
+The conversation prompt keeps its CLI session under `bots/_claude_cli`, resumed across calls with `--resume`, while every coding call runs in a fresh one-shot session with the whole coding conversation; you can inspect one directly with `claude --resume <session id>` from that directory. `--resume` ignores mindcraft's own history trimming, so per-profile `max_messages`/`summary_chunk_size` (see `profiles/haiku.json`) bound how much real context the CLI session keeps.
 
 ## Reasoning
 

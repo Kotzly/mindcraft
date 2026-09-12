@@ -39,3 +39,22 @@ test('renderTurns labels system and assistant turns, leaves user turns bare', ()
     ];
     assert.equal(renderTurns(turns), 'SYSTEM: sys\nhi\nYour output: hey');
 });
+
+test('sendStatelessRequest runs every turn in an unsaved one-shot session', async () => {
+    const { ClaudeCLI } = await import('../src/models/claude_cli.js');
+    const model = new ClaudeCLI('haiku', null, {});
+    const calls = [];
+    model._run = async (args, prompt) => {
+        calls.push({ args, prompt });
+        return { result: 'ok' };
+    };
+    const turns = [{ role: 'user', content: 'player: build a hut ' }, { role: 'system', content: 'Code output: error' }];
+    assert.equal(await model.sendStatelessRequest(turns, 'You are a coder.'), 'ok');
+    assert.equal(await model.sendStatelessRequest(turns, 'You are a coder.'), 'ok');
+    for (const { args, prompt } of calls) {
+        assert.ok(args.includes('--no-session-persistence'));
+        assert.ok(!args.includes('--resume') && !args.includes('--session-id'));
+        assert.equal(prompt, 'player: build a hut\nSYSTEM: Code output: error');
+    }
+    assert.deepEqual(model.getSessions(), []);
+});

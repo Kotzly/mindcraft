@@ -318,7 +318,10 @@ export class Prompter {
                 prompt = addThinkTagsInstruction(prompt);
             prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
-            let resp = await this.code_model.sendRequest(messages, prompt);
+            // backends that keep sessions (claude-cli) run each coding call in its own session
+            let resp = this.code_model.sendStatelessRequest
+                ? await this.code_model.sendStatelessRequest(messages, prompt)
+                : await this.code_model.sendRequest(messages, prompt);
             await this._saveLog(prompt, messages, resp, 'coding');
             if (resp?.includes('</think>')) {
                 const [_, afterThink] = resp.split('</think>')

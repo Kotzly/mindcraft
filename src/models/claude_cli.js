@@ -9,13 +9,14 @@ const MAX_MIRRORED_TURNS = 200;
 // Sends requests through the local Claude Code CLI (`claude -p`), so they run on
 // the subscription logged into the CLI instead of an API key.
 //
-// Each kind of prompt with a history (conversation, coding) keeps its own CLI
+// Each kind of prompt with a history (conversation) keeps its own CLI
 // session, keyed by the first line of its system prompt. The session id is
 // generated up front: the first call creates the session with --session-id and
 // later calls continue it with --resume, sending only the turns the session
 // hasn't seen yet. Mindcraft re-renders the system prompt on every call (stats,
 // inventory, examples), so it is passed each time with snapshots turned off.
-// Prompts without turns (memory saving, bot responder) run as one-shot calls.
+// Prompts without turns (memory saving, bot responder) and coding prompts, via
+// sendStatelessRequest, run as one-shot calls.
 export class ClaudeCLI {
     static prefix = 'claude-cli';
     static nativeThinking = true;
@@ -33,16 +34,9 @@ export class ClaudeCLI {
     }
 
     async sendRequest(turns, systemMessage) {
-        turns = turns.map(turn => ({
-            role: turn.role,
-            content: typeof turn.content === 'string' ? turn.content.trim() : JSON.stringify(turn.content)
-        }));
-
-        if (turns.length === 0) {
-            const prompt = 'Respond following the instructions in your system prompt.';
-            const res = await this._run(this._args(systemMessage, ['--no-session-persistence']), prompt, 'one-shot');
-            return this._result(res);
-        }
+        turns = normalizeTurns(turns);
+        if (turns.length === 0)
+            return this.sendStatelessRequest(turns, systemMessage);
 
         const key = systemMessage.split('\n')[0];
         const session = this.sessions[key] ??= { queue: Promise.resolve() };
@@ -52,6 +46,14 @@ export class ClaudeCLI {
         const response = session.queue.then(() => this._sessionRequest(session, turns, systemMessage));
         session.queue = response.catch(() => {});
         return response;
+    }
+
+    // a fresh, unsaved CLI session per call that gets every turn, for prompts that
+    // shouldn't build on earlier calls (coding)
+    async sendStatelessRequest(turns, systemMessage) {
+        const prompt = renderTurns(normalizeTurns(turns)) || 'Respond following the instructions in your system prompt.';
+        const res = await this._run(this._args(systemMessage, ['--no-session-persistence']), prompt, 'one-shot');
+        return this._result(res);
     }
 
     async _sessionRequest(session, turns, systemMessage) {
@@ -226,6 +228,13 @@ function sameTurn(session_turn, turn) {
     if (turn.role === 'assistant')
         return session_turn.content.startsWith(turn.content);
     return session_turn.content === turn.content;
+}
+
+function normalizeTurns(turns) {
+    return turns.map(turn => ({
+        role: turn.role,
+        content: typeof turn.content === 'string' ? turn.content.trim() : JSON.stringify(turn.content)
+    }));
 }
 
 // user turns already carry the sender's name; system turns get the label strictFormat uses
