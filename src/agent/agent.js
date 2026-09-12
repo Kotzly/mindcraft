@@ -9,6 +9,7 @@ import { ActionManager } from './action_manager.js';
 import { NPCContoller } from './npc/controller.js';
 import { MemoryBank } from './memory_bank.js';
 import { SelfPrompter } from './self_prompter.js';
+import { TodoList } from './todo_list.js';
 import convoManager from './conversation.js';
 import { handleTranslation, handleEnglishTranslation } from '../utils/translator.js';
 import { addBrowserViewer } from './vision/browser_viewer.js';
@@ -17,6 +18,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import { restoreAgentUsage } from '../utils/usage.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -43,6 +45,8 @@ export class Agent {
         this.coder = new Coder(this);
         this.npc = new NPCContoller(this);
         this.memory_bank = new MemoryBank();
+        this.todo = new TodoList();
+        this.command_history = [];
         this.self_prompter = new SelfPrompter(this);
         convoManager.initAgent(this);
         await this.prompter.initExamples();
@@ -60,6 +64,9 @@ export class Agent {
         }
         this.task = new Task(this, settings.task, taskStart);
         this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []);
+        if (!settings.todo_list) {
+            this.blocked_actions = this.blocked_actions.concat(['!setTodo', '!addTodo', '!doneTodo']);
+        }
         blacklistCommands(this.blocked_actions);
 
         console.log(this.name, 'logging into minecraft...');
@@ -95,10 +102,12 @@ export class Agent {
             serverProxy.login();
             
             // Set skin for profile, requires Fabric Tailor. (https://modrinth.com/mod/fabrictailor)
-            if (this.prompter.profile.skin)
-                this.bot.chat(`/skin set URL ${this.prompter.profile.skin.model} ${this.prompter.profile.skin.path}`);
-            else
-                this.bot.chat(`/skin clear`);
+            if (this.prompter.profile.skin !== undefined) {
+                if (this.prompter.profile.skin)
+                    this.bot.chat(`/skin set URL ${this.prompter.profile.skin.model} ${this.prompter.profile.skin.path}`);
+                else
+                    this.bot.chat(`/skin clear`);
+            }
         });
 		const spawnTimeoutDuration = settings.spawn_timeout;
         const spawnTimeout = setTimeout(() => {
@@ -139,7 +148,7 @@ export class Agent {
 
             } catch (error) {
                 console.error('Error in spawn event:', error);
-                process.exit(0);
+                process.exit(1);
             }
         });
     }
@@ -194,15 +203,27 @@ export class Agent {
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
 
+        let resumed = false;
         if (save_data?.self_prompt) {
-            if (init_message) {
-                this.history.add('system', init_message);
+            if (save_data.todo) {
+                this.todo.load(save_data.todo);
+                if (save_data.planned_goal) {
+                    this.self_prompter.planned_goal = save_data.planned_goal;
+                }
             }
             await this.self_prompter.handleLoad(save_data.self_prompt, save_data.self_prompting_state);
+            resumed = true; // the goal loop drives the bot's next action/message, skip init_message/hello below
+        }
+        if (save_data?.command_history) {
+            this.command_history = save_data.command_history;
+        }
+        if (save_data?.usage) {
+            restoreAgentUsage(this.prompter, save_data.usage);
         }
         if (save_data?.last_sender) {
             this.last_sender = save_data.last_sender;
             if (convoManager.otherAgentInGame(this.last_sender)) {
+                resumed = true;
                 const msg_package = {
                     message: `You have restarted and this message is auto-generated. Continue the conversation with me.`,
                     start: true
@@ -210,11 +231,13 @@ export class Agent {
                 convoManager.receiveFromBot(this.last_sender, msg_package);
             }
         }
-        else if (init_message) {
-            await this.handleMessage('system', init_message, 2);
-        }
-        else {
-            this.openChat("Hello world! I am "+this.name);
+        if (!resumed) {
+            if (init_message) {
+                await this.handleMessage('system', init_message, 2);
+            }
+            else {
+                this.openChat("Hello world! I am "+this.name);
+            }
         }
     }
 
@@ -283,7 +306,8 @@ export class Agent {
                     this.history.add(source, message);
                 }
                 let execute_res = await executeCommand(this, message);
-                if (execute_res) 
+                this.logCommand(source, message.substring(message.indexOf(user_command_name)), execute_res);
+                if (execute_res)
                     this.routeResponse(source, execute_res);
                 return true;
             }
@@ -360,9 +384,14 @@ export class Agent {
                 }
 
                 let execute_res = await executeCommand(this, res);
+                this.logCommand(source, res.substring(res.indexOf(command_name)), execute_res);
 
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
+
+                if (self_prompt && !['!setTodo', '!addTodo', '!doneTodo'].includes(command_name)) {
+                    this.todo.tick();
+                }
 
                 if (execute_res)
                     this.history.add('system', execute_res);
@@ -379,6 +408,19 @@ export class Agent {
         }
 
         return used_command;
+    }
+
+    logCommand(source, command, result) {
+        this.command_history.push({
+            time: Date.now(),
+            source,
+            command: command.trim().slice(0, 200),
+            result: result ? String(result).trim().slice(0, 500) : null
+        });
+        const MAX_COMMAND_HISTORY = 50;
+        if (this.command_history.length > MAX_COMMAND_HISTORY) {
+            this.command_history.shift();
+        }
     }
 
     async routeResponse(to_player, message) {
@@ -421,7 +463,8 @@ export class Agent {
         }
         else {
             if (settings.speak) {
-                speak(to_translate, this.prompter.profile.speak_model);
+                // "system" applies to all bots; otherwise each profile's speak_model is used
+                speak(to_translate, settings.speak === 'system' ? 'system' : this.prompter.profile.speak_model);
             }
             if (settings.chat_ingame) {this.bot.chat(message);}
             sendOutputToServer(this.name, message);

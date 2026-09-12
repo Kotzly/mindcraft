@@ -1,4 +1,5 @@
 import * as world from '../library/world.js';
+import * as regions from '../library/regions.js';
 import * as mc from '../../utils/mcdata.js';
 import { getCommandDocs } from './index.js';
 import convoManager from '../conversation.js';
@@ -49,7 +50,7 @@ export const queryList = [
             let action = agent.actions.currentActionLabel;
             if (agent.isIdle())
                 action = 'Idle';
-            res += `\- Current Action: ${action}`;
+            res += `\n- Current Action: ${action}`;
 
 
             let players = world.getNearbyPlayerNames(bot);
@@ -225,7 +226,19 @@ export const queryList = [
         perform: async function (agent) {
             return "Saved place names: " + agent.memory_bank.getKeys();
         }
-    }, 
+    },
+    {
+        name: '!listProtectedRegions',
+        description: 'List all regions protected from digging/breaking by pathing and getUnstuck.',
+        perform: function (agent) {
+            const regionList = regions.listProtectedRegions();
+            if (regionList.length === 0)
+                return 'No protected regions.';
+            return 'Protected regions:\n' + regionList.map(r =>
+                `- ${r.name}: (${r.min.x}, ${r.min.y}, ${r.min.z}) to (${r.max.x}, ${r.max.y}, ${r.max.z})`
+            ).join('\n');
+        }
+    },
     {
         name: '!checkBlueprintLevel',
         description: 'Check if the level is complete and what blocks still need to be placed for the blueprint',
@@ -315,7 +328,7 @@ export const queryList = [
             'query': { type: 'string', description: 'The query to search for.' }
         },
         perform: async function (agent, query) {
-            const url = `https://minecraft.wiki/w/${query}`
+            const url = `https://minecraft.wiki/w/${encodeURIComponent(query.replaceAll(' ', '_'))}`
             try {
                 const response = await fetch(url);
                 if (response.status === 404) {
@@ -323,14 +336,14 @@ export const queryList = [
                 }
                 const html = await response.text();
                 const $ = load(html);
-            
+
                 const parserOutput = $("div.mw-parser-output");
-                
+
                 parserOutput.find("table.navbox").remove();
 
                 const divContent = parserOutput.text();
-            
-                return divContent.trim();
+
+                return divContent.trim().slice(0, 4000);
               } catch (error) {
                 console.error("Error fetching or parsing HTML:", error);
                 return `The following error occurred: ${error}`
@@ -342,6 +355,49 @@ export const queryList = [
         description: 'Lists all available commands and their descriptions.',
         perform: async function (agent) {
             return getCommandDocs(agent);
+        }
+    },
+    {
+        name: '!setTodo',
+        description: 'Set the goal plan as a todo list. Steps separated by semicolons or newlines.',
+        params: {
+            'steps': { type: 'string', description: 'Steps separated by ; or newlines, e.g. "mine 3 ore; smelt ore; craft pickaxe"' }
+        },
+        perform: function (agent, steps) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            const parsed = agent.todo.constructor.parseSteps(steps);
+            agent.todo.set(parsed);
+            return '\n' + agent.todo.render() + '\n';
+        }
+    },
+    {
+        name: '!addTodo',
+        description: 'Add a missing step to the plan, inserted before the current step.',
+        params: {
+            'step': { type: 'string', description: 'A missing step' }
+        },
+        perform: function (agent, step) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            agent.todo.add(step);
+            return '\n' + agent.todo.render() + '\n';
+        }
+    },
+    {
+        name: '!doneTodo',
+        description: 'Mark the current step as done and move to the next one. The step number must be the current step.',
+        params: {
+            'step': { type: 'int', description: 'The current step number', domain: [1, Infinity] }
+        },
+        perform: function (agent, step) {
+            if (agent.self_prompter.isStopped()) {
+                return 'You have no goal. Set one with !goal first.';
+            }
+            const result = agent.todo.done(step);
+            return '\n' + result + '\n';
         }
     },
 ];

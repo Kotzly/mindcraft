@@ -8,6 +8,7 @@ import {
     getFirstBlockAboveHead
 } from "./world.js";
 import convoManager from '../conversation.js';
+import { getAgentUsage } from '../../utils/usage.js';
 
 export function getFullState(agent) {
     const bot = agent.bot;
@@ -101,6 +102,14 @@ export function getFullState(agent) {
         },
         modes: {
             summary: bot.modes.getMiniDocs()
+        },
+        usage: getAgentUsage(agent.prompter),
+        contextTokens: agent.history.estimateTokens(),
+        commandHistory: agent.command_history.slice(-15).reverse(),
+        todo: {
+            items: agent.todo.items,
+            attempts: agent.todo.attempts,
+            stuck: agent.todo.isStuck()
         }
     };
 

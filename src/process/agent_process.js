@@ -5,9 +5,10 @@ import { logoutAgent } from '../mindcraft/mindserver.js';
 const init_agent_path = fileURLToPath(new URL('./init_agent.js', import.meta.url));
 
 export class AgentProcess {
-    constructor(name, port) {
+    constructor(name, port, host='localhost') {
         this.name = name;
         this.port = port;
+        this.host = host;
     }
 
     start(load_memory=false, init_message=null, count_id=0) {
@@ -22,6 +23,7 @@ export class AgentProcess {
         if (init_message)
             args.push('-m', init_message);
         args.push('-p', this.port);
+        args.push('--host', this.host);
 
         const agentProcess = spawn(process.execPath, args, {
             stdio: 'inherit',

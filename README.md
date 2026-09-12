@@ -222,6 +222,38 @@ Voice synthesis models are used to narrate bot responses and specified with `spe
 By default, the program will use the profiles specified in `settings.js`. You can specify one or more agent profiles using the `--profiles` argument: `node main.js --profiles ./profiles/andy.json ./profiles/jill.json`
 
 
+# Navigation and Unstucking
+
+Bots get physically stuck in Minecraft: wedged in a fence corner, boxed in by a mob, dropped into a pit they dug, or facing a jump they can never land. `mineflayer-pathfinder` handles this by giving up on a blocked path after 3.5 seconds and recomputing it, but the recomputed path is usually identical, so the bot retries the same impossible move forever and `pathfinder.goto()` never resolves. Navigation in `src/agent/library/skills.js` wraps the pathfinder to break that loop.
+
+## Watchdog
+
+Every `goToGoal()` call runs the pathfinder under a watchdog that aborts navigation when:
+
+- the pathfinder reports 3 consecutive blocked path resets (`stuck`, `dig_error`, `place_error`, `no_scaffolding_blocks`), or
+- the bot has not moved a block in 15 seconds (`no_progress_ms`), or
+- the bot is digging a block it has no tool for, or has been digging the same block for 60 seconds (`max_dig_ms`).
+
+Digging counts as progress, so mining through a path is not mistaken for being stuck. On abort the pathfinder is stopped for real and `goToGoal()` returns instead of hanging, so the bot always reports back to the LLM rather than freezing.
+
+## Recovery and retry
+
+After an aborted attempt, `goToGoal()` escalates before retrying:
+
+1. The failure position is remembered for 2 minutes and penalized in `Movements.exclusionAreasStep`, so A* routes around the spot instead of replanning straight back into it.
+2. `getUnstuck()` frees the bot without the pathfinder: it jumps and strafes in random directions, and digs an escape route (ahead at feet, ahead at head, then straight up) if it is boxed in.
+3. The path is replanned with more conservative movements: parkour and sprinting off, plus any block the bot could not break blacklisted.
+
+Three attempts are made before giving up. The LLM can also trigger step 2 itself with the `!getUnstuck` command.
+
+## The `unstuck` mode
+
+The `unstuck` mode in `src/agent/modes.js` is the outer safety net, triggering when the bot has not moved for 20 seconds during an action. It tries `getUnstuck()`, then `moveAway()`, and verifies that the bot actually moved rather than assuming it did. When recovery fails it tells the LLM where the bot is trapped so it can dig out or travel elsewhere, and backs off before trying again (20s × the number of consecutive failures). Only after 5 consecutive failed recoveries does the agent restart. Restarting respawns the bot exactly where it was trapped, so it is a last resort rather than the first response.
+
+## Tuning
+
+Thresholds live as constants next to `goToGoal()` in `src/agent/library/skills.js` (`STUCK_SPOT_TTL`, `STUCK_SPOT_RADIUS`, `STUCK_SPOT_COST`) and as `gotoMonitored` options (`no_progress_ms`, `max_dig_ms`, `max_blocked_resets`), which `goToGoal()` accepts and forwards. The mode's `max_stuck_time` and `max_recoveries` are fields on the `unstuck` mode. On a laggy server, raise `no_progress_ms` before anything else.
+
 # Contributing
 
 We welcome contributions to the project! We are generally less responsive to github issues, and more responsive to pull requests. Join the [discord](https://discord.gg/mp73p35dzC) for more active support and direction.

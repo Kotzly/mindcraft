@@ -88,6 +88,43 @@ const modes_list = [
         }
     },
     {
+        name: 'tool_durability_warning',
+        description: 'Warn when the held tool (pickaxe, axe, shovel, sword, hoe) is about to break, and when it breaks.',
+        interrupts: [],
+        on: true,
+        active: false,
+        warn_threshold: 0.05, // warn when 5% or less durability remains
+        warned_item_name: null, // name of the item last warned about, to avoid spamming every tick
+        prev_item_name: null, // name of the held item last tick, to detect it breaking
+        prev_remaining: null, // its durability remaining last tick
+        update: function (agent) {
+            const item = agent.bot.heldItem;
+            const cur_name = item ? item.name : null;
+            const cur_remaining = (item && item.maxDurability && item.durabilityUsed != null)
+                ? 1 - (item.durabilityUsed / item.maxDurability)
+                : null;
+
+            // a tool that was nearly broken and is now gone from the hand just broke
+            if (cur_name === null && this.prev_item_name !== null &&
+                this.prev_remaining !== null && this.prev_remaining <= this.warn_threshold) {
+                say(agent, `My ${this.prev_item_name} broke!`);
+                this.warned_item_name = null;
+            }
+            else if (cur_remaining !== null && cur_remaining <= this.warn_threshold) {
+                if (this.warned_item_name !== cur_name) {
+                    this.warned_item_name = cur_name;
+                    say(agent, `My ${cur_name} is about to break! (${Math.round(cur_remaining * 100)}% durability left)`);
+                }
+            }
+            else {
+                this.warned_item_name = null;
+            }
+
+            this.prev_item_name = cur_name;
+            this.prev_remaining = cur_remaining;
+        }
+    },
+    {
         name: 'unstuck',
         description: 'Attempt to get unstuck when in the same place for a while. Interrupts some actions.',
         interrupts: ['all'],
@@ -99,6 +136,8 @@ const modes_list = [
         last_time: Date.now(),
         max_stuck_time: 20,
         prev_dig_block: null,
+        failed_recoveries: 0,
+        max_recoveries: 5,
         update: async function (agent) {
             if (agent.isIdle()) { 
                 this.prev_location = null;
@@ -118,16 +157,34 @@ const modes_list = [
                 this.stuck_time = 0;
                 this.prev_dig_block = null;
             }
-            const max_stuck_time = cur_dig_block?.name === 'obsidian' ? this.max_stuck_time * 2 : this.max_stuck_time;
+            let max_stuck_time = cur_dig_block?.name === 'obsidian' ? this.max_stuck_time * 2 : this.max_stuck_time;
+            // back off between attempts so repeated failures don't interrupt the bot constantly
+            max_stuck_time *= 1 + this.failed_recoveries;
             if (this.stuck_time > max_stuck_time) {
                 say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;
+                const stuck_pos = bot.entity.position.clone();
+                // recovery escalates: free the bot physically, then walk away, then dig out.
+                // it is bounded by the action timeout instead of killing the process on a timer,
+                // since restarting respawns the bot in the same place it was stuck in
                 execute(this, agent, async () => {
-                    const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 10000);
-                    await skills.moveAway(bot, 5);
-                    clearTimeout(crashTimeout);
-                    say(agent, 'I\'m free.');
-                });
+                    let freed = await skills.getUnstuck(bot);
+                    if (!freed) {
+                        await skills.moveAway(bot, 5);
+                        freed = bot.entity.position.distanceTo(stuck_pos) > this.distance;
+                    }
+                    if (freed) {
+                        this.failed_recoveries = 0;
+                        say(agent, 'I\'m free.');
+                        return;
+                    }
+                    this.failed_recoveries++;
+                    say(agent, `I couldn't get free (attempt ${this.failed_recoveries}).`);
+                    await agent.history.add('system', `You are stuck at ${stuck_pos.floored()} and ${this.failed_recoveries} automatic recovery attempts failed. You are likely trapped. Try digging out with !digDown, placing blocks to climb out, or travelling in a different direction.`);
+                    if (this.failed_recoveries >= this.max_recoveries) {
+                        agent.cleanKill('Stuck and unable to recover after repeated attempts.');
+                    }
+                }, 2);
             }
             this.last_time = Date.now();
         },
