@@ -10,6 +10,21 @@ async function say(agent, message) {
     agent.openChat(message);
 }
 
+const _clear_path_cache = new Map(); // entity id -> {time, clear}
+async function isClearPathCached(bot, entity) {
+    const hit = _clear_path_cache.get(entity.id);
+    if (hit && Date.now() - hit.time < 1000) return hit.clear;
+    const clear = await world.isClearPath(bot, entity);
+    _clear_path_cache.set(entity.id, { time: Date.now(), clear });
+    if (_clear_path_cache.size > 200) {
+        const cutoff = Date.now() - 10000;
+        for (const [id, v] of _clear_path_cache) {
+            if (v.time < cutoff) _clear_path_cache.delete(id);
+        }
+    }
+    return clear;
+}
+
 // a mode is a function that is called every tick to respond immediately to the world
 // it has the following fields:
 // on: whether 'update' is called every tick
@@ -202,7 +217,7 @@ const modes_list = [
         active: false,
         update: async function (agent) {
             const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 16);
-            if (enemy && await world.isClearPath(agent.bot, enemy)) {
+            if (enemy && await isClearPathCached(agent.bot, enemy)) {
                 say(agent, `Aaa! A ${enemy.name.replace("_", " ")}!`);
                 execute(this, agent, async () => {
                     await skills.avoidEnemies(agent.bot, 24);
@@ -218,7 +233,7 @@ const modes_list = [
         active: false,
         update: async function (agent) {
             const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
-            if (enemy && await world.isClearPath(agent.bot, enemy)) {
+            if (enemy && await isClearPathCached(agent.bot, enemy)) {
                 say(agent, `Fighting ${enemy.name}!`);
                 execute(this, agent, async () => {
                     await skills.defendSelf(agent.bot, 8);
@@ -233,8 +248,10 @@ const modes_list = [
         on: true,
         active: false,
         update: async function (agent) {
+            const has_food = agent.bot.inventory.items().some(item => mc.isFood?.(item) ?? ['cooked','bread','apple','beef','porkchop','chicken','mutton','carrot','potato'].some(f => item.name.includes(f)));
+            if (agent.bot.food >= 14 && has_food) return;
             const huntable = world.getNearestEntityWhere(agent.bot, entity => mc.isHuntable(entity), 8);
-            if (huntable && await world.isClearPath(agent.bot, huntable)) {
+            if (huntable && await isClearPathCached(agent.bot, huntable)) {
                 execute(this, agent, async () => {
                     say(agent, `Hunting ${huntable.name}!`);
                     await skills.attackEntity(agent.bot, huntable);
@@ -252,10 +269,12 @@ const modes_list = [
         wait: 2, // number of seconds to wait after noticing an item to pick it up
         prev_item: null,
         noticed_at: -1,
+        ignore_until: 0,
         update: async function (agent) {
+            if (Date.now() < this.ignore_until) return;
             let item = world.getNearestEntityWhere(agent.bot, entity => entity.name === 'item', 8);
             let empty_inv_slots = agent.bot.inventory.emptySlotCount();
-            if (item && item !== this.prev_item && await world.isClearPath(agent.bot, item) && empty_inv_slots > 1) {
+            if (item && item !== this.prev_item && await isClearPathCached(agent.bot, item) && empty_inv_slots > 1) {
                 if (this.noticed_at === -1) {
                     this.noticed_at = Date.now();
                 }
@@ -417,6 +436,10 @@ class ModeController {
 
     pause(mode_name) {
         modes_map[mode_name].paused = true;
+    }
+
+    snooze(mode_name, ms) {
+        modes_map[mode_name].ignore_until = Date.now() + ms;
     }
 
     unpause(mode_name) {

@@ -282,6 +282,7 @@ export const actionsList = [
         },
         perform: runAsAction(async (agent, item_name, num) => {
             const start_loc = agent.bot.entity.position;
+            agent.bot.modes.snooze('item_collecting', 15000);
             await skills.moveAway(agent.bot, 5);
             await skills.discard(agent.bot, item_name, num);
             await skills.goToPosition(agent.bot, start_loc.x, start_loc.y, start_loc.z, 0);

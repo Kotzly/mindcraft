@@ -1237,7 +1237,7 @@ export async function goToGoal(bot, goal, options={}) {
     let cant_break = [];
 
     if (!movements) {
-        const pathfind_timeout = 1000;
+        const pathfind_timeout = 300;
         const non_destructive = getMovements(bot, { destructive: false });
         if (bot.pathfinder.getPathTo(non_destructive, goal, pathfind_timeout).status === 'success') {
             movements = non_destructive;
