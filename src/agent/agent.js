@@ -389,7 +389,7 @@ export class Agent {
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
 
-                if (self_prompt && !['!setTodo', '!addTodo', '!doneTodo'].includes(command_name)) {
+                if (self_prompt && isAction(command_name) && !['!setTodo', '!addTodo', '!doneTodo'].includes(command_name)) {
                     this.todo.tick();
                 }
 

@@ -19,6 +19,7 @@ export class TodoList {
   }
 
   done(n) {
+    if (!n) n = this.current()?.number;
     const current = this.current();
     if (!current || current.number !== n) {
       const currentText = current ? `'${current.item.text}'` : 'none';

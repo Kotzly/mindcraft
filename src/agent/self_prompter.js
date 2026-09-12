@@ -64,7 +64,8 @@ export class SelfPrompter {
         let no_command_count = 0;
         const MAX_NO_COMMAND = 3;
         while (!this.interrupt) {
-            const msg = `You are self-prompting with the goal: '${this.prompt}'. Your next response MUST contain a command with this syntax: !commandName. Respond:`;
+            const todoState = this.agent.todo.isStuck() ? ' The same command has been tried multiple times.' : '';
+            const msg = `You are self-prompting with the goal: '${this.prompt}'.${todoState} Respond with a command.`;
 
             this.in_loop_message = true;
             let used_command = await this.agent.handleMessage('system', msg, -1);

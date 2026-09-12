@@ -390,7 +390,7 @@ export const queryList = [
         name: '!doneTodo',
         description: 'Mark the current step as done and move to the next one. The step number must be the current step.',
         params: {
-            'step': { type: 'int', description: 'The current step number', domain: [1, Infinity] }
+            'step': { type: 'int', description: 'The current step number', domain: [1, Infinity], optional: true, default: 0 }
         },
         perform: function (agent, step) {
             if (agent.self_prompter.isStopped()) {

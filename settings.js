@@ -58,6 +58,7 @@ const settings = {
     "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
 
     "max_messages": 15, // max number of messages to keep in context
+    "summary_chunk_size": 5, // number of messages to summarize into memory when hitting max_messages
     "num_examples": 2, // number of examples to give to the model
     "max_commands": -1, // max number of commands that can be used in consecutive responses. -1 for no limit
     "show_command_syntax": "full", // "full", "shortened", or "none"

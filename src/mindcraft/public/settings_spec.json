@@ -76,6 +76,11 @@
         "description": "Maximum number of recent messages to keep in context for LLM",
         "default": 15
     },
+    "summary_chunk_size": {
+        "type": "number",
+        "description": "Number of messages to summarize into memory when hitting max_messages",
+        "default": 5
+    },
     "num_examples": {
         "type": "number",
         "description": "Number of examples to select to help prompt better LLM responses",
