@@ -62,7 +62,7 @@ export class TodoList {
 
   render() {
     if (this.items.length === 0) return '';
-    const lines = ['YOUR TODO LIST (your own plan for the goal). When a command result or your inventory shows the current step is finished, use !doneTodo(n) before starting the next step. Use !addTodo for a missing step:'];
+    const lines = ['YOUR TODO LIST (your own plan for the goal). When a command result or your inventory shows the current step is finished, use !doneTodo before starting the next step. Use !addTodo for a missing step. When every step is done: if the goal is fully met use !endGoal, otherwise add the next steps with !setTodo:'];
     const current = this.current();
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i];

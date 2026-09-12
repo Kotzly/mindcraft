@@ -88,7 +88,7 @@ export default {
 
 ## Todo list
 
-When `settings.todo_list` is `true` (the default), a `!goal` keeps a todo list in the system prompt that the bot updates as it works: `!setTodo("step one; step two")`, `!addTodo("missing step")`, `!doneTodo(n)`. See [todo_tool.md](todo_tool.md) for the full design.
+When `settings.todo_list` is `true` (the default), a `!goal` keeps a todo list in the system prompt that the bot updates as it works: `!setTodo("step one; step two")`, `!addTodo("missing step")`, `!doneTodo(n)` (or just `!doneTodo` for the current step). The initial plan comes from the profile's `planning` prompt, run on `planning_model` if set (otherwise `model`); a goal written as a numbered list ("1. ... 2. ...") is used as the plan directly. The list, the goal and the usage counters survive restarts via `bots/<name>/memory.json`. See [todo_tool.md](todo_tool.md) for the full design.
 
 ## Protected regions
 

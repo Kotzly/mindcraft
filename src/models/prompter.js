@@ -75,7 +75,14 @@ export class Prompter {
             this.vision_model = this.chat_model;
         }
 
-        
+        if (this.profile.planning_model) {
+            let planning_model_profile = selectAPI(this.profile.planning_model);
+            this.planning_model = createModel(planning_model_profile);
+        }
+        else {
+            this.planning_model = this.chat_model;
+        }
+
         let embedding_model_profile = null;
         if (this.profile.embedding) {
             try {
@@ -193,6 +200,12 @@ export class Prompter {
         if (prompt.includes('$SELF_PROMPT')) {
             // if active or paused, show the current goal
             let self_prompt = !this.agent.self_prompter.isStopped() ? `YOUR CURRENT ASSIGNED GOAL: "${this.agent.self_prompter.prompt}"\n` : '';
+            if (!this.agent.self_prompter.isStopped() && settings.todo_list) {
+                const todo_render = this.agent.todo.render();
+                if (todo_render) {
+                    self_prompt += todo_render + '\n';
+                }
+            }
             prompt = prompt.replaceAll('$SELF_PROMPT', self_prompt);
         }
         if (prompt.includes('$LAST_GOALS')) {
@@ -287,18 +300,35 @@ export class Prompter {
             return '```//no response```';
         }
         this.awaiting_coding = true;
-        await this.checkCooldown();
-        let prompt = this.profile.coding;
-        prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
+        try {
+            await this.checkCooldown();
+            let prompt = this.profile.coding;
+            prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
-        let resp = await this.code_model.sendRequest(messages, prompt);
-        this.awaiting_coding = false;
-        await this._saveLog(prompt, messages, resp, 'coding');
-        if (resp?.includes('</think>')) {
-            const [_, afterThink] = resp.split('</think>')
-            resp = afterThink;
+            let resp = await this.code_model.sendRequest(messages, prompt);
+            await this._saveLog(prompt, messages, resp, 'coding');
+            if (resp?.includes('</think>')) {
+                const [_, afterThink] = resp.split('</think>')
+                resp = afterThink;
+            }
+            return resp;
+        } catch (error) {
+            console.error('Error during code generation:', error);
+            return ''; // the coder treats an empty response as "no code provided"
+        } finally {
+            this.awaiting_coding = false;
         }
-        return resp;
+    }
+
+    // history.js calls this after trimming old turns, so any model backend that keeps its
+    // own server-side session (e.g. claude-cli's --resume) can drop it and start fresh,
+    // rather than silently keeping the trimmed-away turns in the model's real context.
+    notifyHistoryTrimmed() {
+        const models = new Set([this.chat_model, this.code_model, this.vision_model, this.planning_model]);
+        for (const model of models) {
+            if (typeof model.notifyHistoryTrimmed === 'function')
+                model.notifyHistoryTrimmed();
+        }
     }
 
     async promptMemSaving(to_summarize) {
@@ -312,6 +342,36 @@ export class Prompter {
             resp = afterThink;
         }
         return resp;
+    }
+
+    async promptPlanning(goal) {
+        await this.checkCooldown();
+        let prompt = this.profile.planning || this.profile.saving_memory;
+        if (!prompt) return;
+        const oldPrompt = this.agent.self_prompter.prompt;
+        this.agent.self_prompter.prompt = goal;
+        prompt = await this.replaceStrings(prompt, [], null, null);
+        this.agent.self_prompter.prompt = oldPrompt;
+
+        const model = this.planning_model || this.chat_model;
+        let resp;
+        try {
+            resp = await model.sendRequest([], prompt);
+        } catch (error) {
+            console.error('Planning failed, leaving the todo list empty:', error);
+            return;
+        }
+        await this._saveLog(prompt, [], resp, 'planning');
+        if (resp?.includes('</think>')) {
+            const [_, afterThink] = resp.split('</think>')
+            resp = afterThink;
+        }
+
+        const { TodoList } = await import('../agent/todo_list.js');
+        const steps = TodoList.parseSteps(resp);
+        if (steps.length > 0) {
+            this.agent.todo.set(steps);
+        }
     }
 
     async promptShouldRespondToBot(new_message) {
