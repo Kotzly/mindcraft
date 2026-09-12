@@ -3,6 +3,7 @@ import * as world from "./world.js";
 import pf from 'mineflayer-pathfinder';
 import Vec3 from 'vec3';
 import settings from "../../../settings.js";
+import { isProtected } from "./regions.js";
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -571,6 +572,10 @@ export async function breakBlockAt(bot, x, y, z) {
      **/
     if (x == null || y == null || z == null) throw new Error('Invalid position to break block at.');
     let block = bot.blockAt(Vec3(x, y, z));
+    if (isProtected(block.position)) {
+        log(bot, `Cannot break block at x:${x.toFixed(1)}, y:${y.toFixed(1)}, z:${z.toFixed(1)}: it is in a protected region.`);
+        return false;
+    }
     if (block.name !== 'air' && block.name !== 'water' && block.name !== 'lava') {
         if (bot.modes.isOn('cheat')) {
             if (useDelay) { await new Promise(resolve => setTimeout(resolve, blockPlaceDelay)); }
@@ -1115,6 +1120,8 @@ export function getMovements(bot, options={}) {
         movements.maxDropDown = 3;
     }
     movements.exclusionAreasStep.push(stuckSpotCost);
+    // >= 100 makes Movements.canDig() refuse the block outright, not just discourage it
+    movements.exclusionAreasBreak.push(block => isProtected(block.position) ? 100 : 0);
     return movements;
 }
 
@@ -1328,6 +1335,7 @@ async function digEscapeRoute(bot) {
     for (let position of candidates) {
         const block = bot.blockAt(position);
         if (!block || !block.diggable || block.name === 'air') continue;
+        if (isProtected(block.position)) continue;
         try {
             if (bot.game.gameMode !== 'creative') {
                 await bot.tool.equipForBlock(block);

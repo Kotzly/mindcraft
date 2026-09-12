@@ -1,4 +1,5 @@
 import * as skills from '../library/skills.js';
+import * as regions from '../library/regions.js';
 import settings from '../settings.js';
 import convoManager from '../conversation.js';
 
@@ -164,6 +165,32 @@ export const actionsList = [
         perform: runAsAction(async (agent) => {
             await skills.getUnstuck(agent.bot);
         })
+    },
+    {
+        name: '!protectRegion',
+        description: 'Protect a cuboid region between two corners so pathing and getUnstuck will never dig or break blocks inside it.',
+        params: {
+            'name': { type: 'string', description: 'A name for this protected region.' },
+            'x1': { type: 'float', description: 'The x coordinate of the first corner.', domain: [-Infinity, Infinity] },
+            'y1': { type: 'float', description: 'The y coordinate of the first corner.', domain: [-64, 320] },
+            'z1': { type: 'float', description: 'The z coordinate of the first corner.', domain: [-Infinity, Infinity] },
+            'x2': { type: 'float', description: 'The x coordinate of the opposite corner.', domain: [-Infinity, Infinity] },
+            'y2': { type: 'float', description: 'The y coordinate of the opposite corner.', domain: [-64, 320] },
+            'z2': { type: 'float', description: 'The z coordinate of the opposite corner.', domain: [-Infinity, Infinity] }
+        },
+        perform: async function (agent, name, x1, y1, z1, x2, y2, z2) {
+            const { min, max } = regions.protectRegion(name, { x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 });
+            return `Protected region "${name}" from (${min.x}, ${min.y}, ${min.z}) to (${max.x}, ${max.y}, ${max.z}).`;
+        }
+    },
+    {
+        name: '!unprotectRegion',
+        description: 'Remove a previously protected region by name.',
+        params: {'name': { type: 'string', description: 'The name of the protected region to remove.' }},
+        perform: async function (agent, name) {
+            const removed = regions.unprotectRegion(name);
+            return removed ? `Removed protected region "${name}".` : `No protected region named "${name}".`;
+        }
     },
     {
         name: '!rememberHere',

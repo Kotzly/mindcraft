@@ -1,4 +1,5 @@
 import * as world from '../library/world.js';
+import * as regions from '../library/regions.js';
 import * as mc from '../../utils/mcdata.js';
 import { getCommandDocs } from './index.js';
 import convoManager from '../conversation.js';
@@ -225,7 +226,19 @@ export const queryList = [
         perform: async function (agent) {
             return "Saved place names: " + agent.memory_bank.getKeys();
         }
-    }, 
+    },
+    {
+        name: '!listProtectedRegions',
+        description: 'List all regions protected from digging/breaking by pathing and getUnstuck.',
+        perform: function (agent) {
+            const regionList = regions.listProtectedRegions();
+            if (regionList.length === 0)
+                return 'No protected regions.';
+            return 'Protected regions:\n' + regionList.map(r =>
+                `- ${r.name}: (${r.min.x}, ${r.min.y}, ${r.min.z}) to (${r.max.x}, ${r.max.y}, ${r.max.z})`
+            ).join('\n');
+        }
+    },
     {
         name: '!checkBlueprintLevel',
         description: 'Check if the level is complete and what blocks still need to be placed for the blueprint',
