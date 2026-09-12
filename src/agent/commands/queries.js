@@ -49,7 +49,7 @@ export const queryList = [
             let action = agent.actions.currentActionLabel;
             if (agent.isIdle())
                 action = 'Idle';
-            res += `\- Current Action: ${action}`;
+            res += `\n- Current Action: ${action}`;
 
 
             let players = world.getNearbyPlayerNames(bot);
@@ -315,7 +315,7 @@ export const queryList = [
             'query': { type: 'string', description: 'The query to search for.' }
         },
         perform: async function (agent, query) {
-            const url = `https://minecraft.wiki/w/${query}`
+            const url = `https://minecraft.wiki/w/${encodeURIComponent(query.replaceAll(' ', '_'))}`
             try {
                 const response = await fetch(url);
                 if (response.status === 404) {
@@ -323,14 +323,14 @@ export const queryList = [
                 }
                 const html = await response.text();
                 const $ = load(html);
-            
+
                 const parserOutput = $("div.mw-parser-output");
-                
+
                 parserOutput.find("table.navbox").remove();
 
                 const divContent = parserOutput.text();
-            
-                return divContent.trim();
+
+                return divContent.trim().slice(0, 4000);
               } catch (error) {
                 console.error("Error fetching or parsing HTML:", error);
                 return `The following error occurred: ${error}`

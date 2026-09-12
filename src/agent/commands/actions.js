@@ -283,11 +283,6 @@ export const actionsList = [
         },
         perform: runAsAction(async (agent, item_name, num) => {
             let success = await skills.smeltItem(agent.bot, item_name, num);
-            if (success) {
-                setTimeout(() => {
-                    agent.cleanKill('Safely restarting to update inventory.');
-                }, 500);
-            }
         })
     },
     {
@@ -338,7 +333,7 @@ export const actionsList = [
     {
         name: '!stay',
         description: 'Stay in the current location no matter what. Pauses all modes.',
-        params: {'type': { type: 'int', description: 'The number of seconds to stay. -1 for forever.', domain: [-1, Number.MAX_SAFE_INTEGER] }},
+        params: {'seconds': { type: 'int', description: 'The number of seconds to stay. -1 for forever.', domain: [-1, Number.MAX_SAFE_INTEGER] }},
         perform: runAsAction(async (agent, seconds) => {
             await skills.stay(agent.bot, seconds);
         })

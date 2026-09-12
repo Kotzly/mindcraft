@@ -32,7 +32,12 @@ export class History {
 
     async summarizeMemories(turns) {
         console.log("Storing memories...");
-        this.memory = await this.agent.prompter.promptMemSaving(turns);
+        try {
+            this.memory = await this.agent.prompter.promptMemSaving(turns);
+        } catch (err) {
+            console.error('Memory saving failed, keeping old memory:', err);
+            return;
+        }
 
         if (this.memory.length > 500) {
             this.memory = this.memory.slice(0, 500);
@@ -58,25 +63,25 @@ export class History {
         }
     }
 
-    async add(name, content) {
+    add(name, content) {
         let role = 'assistant';
-        if (name === 'system') {
-            role = 'system';
-        }
-        else if (name !== this.name) {
-            role = 'user';
-            content = `${name}: ${content}`;
-        }
+        if (name === 'system') role = 'system';
+        else if (name !== this.name) { role = 'user'; content = `${name}: ${content}`; }
         this.turns.push({role, content});
-
-        if (this.turns.length >= this.max_messages) {
-            let chunk = this.turns.splice(0, this.summary_chunk_size);
-            while (this.turns.length > 0 && this.turns[0].role === 'assistant')
-                chunk.push(this.turns.shift()); // remove until turns starts with system/user message
-
-            await this.summarizeMemories(chunk);
-            await this.appendFullHistory(chunk);
-        }
+        if (this.turns.length >= this.max_messages)
+            this._scheduleTrim();
+    }
+    _scheduleTrim() {
+        this._trim_queue = (this._trim_queue || Promise.resolve()).then(() => this._trim()).catch(err => console.error('History trim failed:', err));
+    }
+    async _trim() {
+        if (this.turns.length < this.max_messages) return;
+        let chunk = this.turns.splice(0, this.summary_chunk_size);
+        while (this.turns.length > 0 && this.turns[0].role === 'assistant')
+            chunk.push(this.turns.shift());
+        this.agent.prompter.notifyHistoryTrimmed();
+        await this.summarizeMemories(chunk);
+        await this.appendFullHistory(chunk);
     }
 
     async save() {
