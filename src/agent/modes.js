@@ -94,6 +94,9 @@ const modes_list = [
             else if (Date.now() - bot.lastDamageTime < 3000 && (bot.health < 5 || bot.lastDamageTaken >= bot.health)) {
                 say(agent, 'I\'m dying!');
                 execute(this, agent, async () => {
+                    const food_names = ['cooked','bread','apple','beef','porkchop','chicken','mutton','carrot','potato'];
+                    const food_item = bot.inventory.items().find(item => mc.isFood?.(item) ?? food_names.some(f => item.name.includes(f)));
+                    if (food_item) await skills.consume(bot, food_item.name);
                     await skills.moveAway(bot, 20);
                 });
             }

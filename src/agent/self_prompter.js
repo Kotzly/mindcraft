@@ -65,7 +65,18 @@ export class SelfPrompter {
         const MAX_NO_COMMAND = 3;
         while (!this.interrupt) {
             const todoState = this.agent.todo.isStuck() ? ' The same command has been tried multiple times.' : '';
-            const msg = `You are self-prompting with the goal: '${this.prompt}'.${todoState} Respond with a command.`;
+            let repeat_hint = '';
+            const recent = this.agent.command_history.slice(-4);
+            if (recent.length >= 2) {
+                const last = recent[recent.length - 1];
+                const prev = recent[recent.length - 2];
+                if (last.command === prev.command && last.result && prev.result &&
+                    (last.result.includes('failed') || last.result.includes('Error')) &&
+                    (prev.result.includes('failed') || prev.result.includes('Error'))) {
+                    repeat_hint = ` The command '${last.command}' has failed twice in a row with the same result; do not repeat it, try a different command or approach.`;
+                }
+            }
+            const msg = `You are self-prompting with the goal: '${this.prompt}'.${todoState} Respond with a command.${repeat_hint}`;
 
             this.in_loop_message = true;
             let used_command = await this.agent.handleMessage('system', msg, -1);
