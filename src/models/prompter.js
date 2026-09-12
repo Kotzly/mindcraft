@@ -275,6 +275,17 @@ export class Prompter {
         return '';
     }
 
+    // history.js calls this after trimming old turns, so any model backend that keeps its
+    // own server-side session (e.g. claude-cli's --resume) can drop it and start fresh,
+    // rather than silently keeping the trimmed-away turns in the model's real context.
+    notifyHistoryTrimmed() {
+        const models = new Set([this.chat_model, this.code_model, this.vision_model, this.planning_model]);
+        for (const model of models) {
+            if (typeof model.notifyHistoryTrimmed === 'function')
+                model.notifyHistoryTrimmed();
+        }
+    }
+
     async promptCoding(messages) {
         if (this.awaiting_coding) {
             console.warn('Already awaiting coding response, returning no response.');

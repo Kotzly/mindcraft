@@ -45,7 +45,7 @@ export class ClaudeCLI {
 
         const key = systemMessage.split('\n')[0];
         const session = this.sessions[key] ??= { queue: Promise.resolve() };
-        if (!session.id)
+        if (!session.id || session.stale)
             this._resetSession(session);
         // calls on the same session must not overlap, or both would resume the same state
         const response = session.queue.then(() => this._sessionRequest(session, turns, systemMessage));
@@ -98,9 +98,20 @@ export class ClaudeCLI {
             .map(([key, s]) => ({ key, id: s.id }));
     }
 
+    // history.js trims old turns out of mindcraft's own history once it hits max_messages,
+    // summarizing them into memory. --resume ignores that: it continues the CLI's own
+    // transcript, which still has everything since the session started. So the next call
+    // per session starts a fresh one instead, keeping the model's real context bounded by
+    // max_messages like every other backend, at the cost of that session's prompt cache.
+    notifyHistoryTrimmed() {
+        for (const session of Object.values(this.sessions))
+            session.stale = true;
+    }
+
     _resetSession(session) {
         session.id = randomUUID();
         session.created = false;
+        session.stale = false;
         session.turns = []; // mirror of the turns the CLI session holds
     }
 
