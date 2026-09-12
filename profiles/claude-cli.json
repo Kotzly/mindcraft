@@ -1,7 +1,7 @@
 {
     "name": "Haiku",
+    "reasoning": "native",
 
-    "model": "claude-cli/haiku",
-    "params": {"effort": "low"},
+    "model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
     "embedding": "ollama"
 }

@@ -1,7 +1,8 @@
 {
     "name": "DevAndy",
+    "reasoning": "off",
 
     "model": "ollama/sweaterdog/andy-4:micro-q8_0",
-    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
+    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}, "reasoning": "native"},
     "embedding": "ollama"
 }

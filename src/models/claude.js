@@ -4,6 +4,7 @@ import { getKey } from '../utils/keys.js';
 
 export class Claude {
     static prefix = 'anthropic';
+    static nativeThinking = true;
     constructor(model_name, url, params) {
         this.model_name = model_name;
         this.params = params || {};
@@ -15,6 +16,13 @@ export class Claude {
         config.apiKey = getKey('ANTHROPIC_API_KEY');
 
         this.anthropic = new Anthropic(config);
+    }
+
+    setReasoning(mode) {
+        if (mode === 'native' && !this.params.thinking)
+            throw new Error('reasoning "native" with the anthropic API needs "thinking" in the model params, e.g. {"type": "enabled", "budget_tokens": 4000}');
+        if (mode !== 'native')
+            delete this.params.thinking;
     }
 
     async sendRequest(turns, systemMessage) {

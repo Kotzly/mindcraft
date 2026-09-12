@@ -1,7 +1,8 @@
 {
     "name": "Andy4",
+    "reasoning": "off",
 
     "model": "ollama/sweaterdog/andy-4:latest",
-    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
+    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}, "reasoning": "native"},
     "embedding": "ollama"
 }

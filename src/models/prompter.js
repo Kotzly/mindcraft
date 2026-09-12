@@ -9,6 +9,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { selectAPI, createModel } from './_model_map.js';
+import { validateProfileReasoning, resolveReasoning, applyReasoning, addThinkTagsInstruction } from './reasoning.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,9 @@ export class Prompter {
     constructor(agent, profile) {
         this.agent = agent;
         this.profile = profile;
+        const reasoning_error = validateProfileReasoning(profile);
+        if (reasoning_error)
+            throw new Error(reasoning_error);
         const defaults_dir = path.join(__dirname, '../../profiles/defaults');
         let default_profile = JSON.parse(readFileSync(path.join(defaults_dir, '_default.json'), 'utf8'));
         let base_fp = '';
@@ -58,10 +62,12 @@ export class Prompter {
 
         let chat_model_profile = selectAPI(this.profile.model);
         this.chat_model = createModel(chat_model_profile);
+        applyReasoning(this.chat_model, resolveReasoning(this.profile, this.profile.model));
 
         if (this.profile.code_model) {
             let code_model_profile = selectAPI(this.profile.code_model);
             this.code_model = createModel(code_model_profile);
+            applyReasoning(this.code_model, resolveReasoning(this.profile, this.profile.code_model));
         }
         else {
             this.code_model = this.chat_model;
@@ -70,6 +76,7 @@ export class Prompter {
         if (this.profile.vision_model) {
             let vision_model_profile = selectAPI(this.profile.vision_model);
             this.vision_model = createModel(vision_model_profile);
+            applyReasoning(this.vision_model, resolveReasoning(this.profile, this.profile.vision_model));
         }
         else {
             this.vision_model = this.chat_model;
@@ -78,6 +85,7 @@ export class Prompter {
         if (this.profile.planning_model) {
             let planning_model_profile = selectAPI(this.profile.planning_model);
             this.planning_model = createModel(planning_model_profile);
+            applyReasoning(this.planning_model, resolveReasoning(this.profile, this.profile.planning_model));
         }
         else {
             this.planning_model = this.chat_model;
@@ -187,7 +195,7 @@ export class Prompter {
 
             prompt = prompt.replaceAll(
                 '$CODE_DOCS',
-                await this.skill_libary.getRelevantSkillDocs(code_task_content, settings.relevant_docs_count)
+                await this.skill_libary.getRelevantSkillDocs(code_task_content, this.profile.relevant_docs_count ?? settings.relevant_docs_count)
             );
         }
         if (prompt.includes('$EXAMPLES') && examples !== null)
@@ -256,6 +264,8 @@ export class Prompter {
             }
 
             let prompt = this.profile.conversing;
+            if (this.chat_model.reasoning === 'tags')
+                prompt = addThinkTagsInstruction(prompt);
             prompt = await this.replaceStrings(prompt, messages, this.convo_examples);
             let generation;
 
@@ -304,6 +314,8 @@ export class Prompter {
         try {
             await this.checkCooldown();
             let prompt = this.profile.coding;
+            if (this.code_model.reasoning === 'tags')
+                prompt = addThinkTagsInstruction(prompt);
             prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
             let resp = await this.code_model.sendRequest(messages, prompt);

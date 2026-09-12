@@ -63,9 +63,17 @@ export class Agent {
             taskStart = Date.now();
         }
         this.task = new Task(this, settings.task, taskStart);
-        this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []);
+        this.blocked_actions = settings.blocked_actions.concat(this.prompter.profile.blocked_actions || [], this.task.blocked_actions || []);
         if (!settings.todo_list) {
             this.blocked_actions = this.blocked_actions.concat(['!setTodo', '!addTodo', '!doneTodo']);
+        }
+        // commands the bot can't make use of: talking to other bots when it is the only one,
+        // looking at things when there is no vision to interpret what it sees
+        if (settings.num_agents === 1) {
+            this.blocked_actions = this.blocked_actions.concat(['!startConversation', '!endConversation']);
+        }
+        if (!settings.allow_vision) {
+            this.blocked_actions = this.blocked_actions.concat(['!lookAtPlayer', '!lookAtPosition']);
         }
         blacklistCommands(this.blocked_actions);
 

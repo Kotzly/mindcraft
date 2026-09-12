@@ -1,5 +1,6 @@
 {
     "name": "azure",
+    "reasoning": "off",
     "model": {
         "api": "azure",
         "url": "https://<your-resource>.openai.azure.com",

@@ -1,5 +1,6 @@
 {
     "name": "Grok",
+    "reasoning": "off",
 
     "model": "grok-4-fast-reasoning",
     

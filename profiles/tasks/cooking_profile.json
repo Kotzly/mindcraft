@@ -1,5 +1,6 @@
 {
     "name": "andy", 
+    "reasoning": "off",
     "model": "claude-3-5-sonnet-latest", 
     "modes": {
         "hunting": false,

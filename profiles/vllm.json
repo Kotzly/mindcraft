@@ -1,5 +1,6 @@
 {
     "name": "vllm",
+    "reasoning": "off",
 
     "model": {
         "api": "vllm",

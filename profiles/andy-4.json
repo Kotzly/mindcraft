@@ -1,5 +1,6 @@
 {
     "name": "andy_4",
+    "reasoning": "off",
 
     "model": "ollama/sweaterdog/andy-4:micro-q8_0",
     

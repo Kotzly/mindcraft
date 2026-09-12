@@ -1,11 +1,12 @@
 {
     "name": "AndyAirOllama",
+    "reasoning": "off",
 
     "model": {
         "api": "ollama",
         "model": "hf.co/Mindcraft-CE/Andy-4.2-Air-GGUF:Q6_K",
         "params": {"options": {"temperature": 0.6, "top_k": 20, "top_p": 0.95, "repeat_penalty": 1.0, "num_ctx": 16384}}
     },
-    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
+    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}, "reasoning": "native"},
     "embedding": "ollama"
 }

@@ -1,5 +1,6 @@
 {
     "name": "Mistral",
+    "reasoning": "off",
 
     "model": "mistral/mistral-large-latest"
 }

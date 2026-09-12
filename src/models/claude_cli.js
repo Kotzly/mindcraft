@@ -18,6 +18,7 @@ const MAX_MIRRORED_TURNS = 200;
 // Prompts without turns (memory saving, bot responder) run as one-shot calls.
 export class ClaudeCLI {
     static prefix = 'claude-cli';
+    static nativeThinking = true;
     constructor(model_name, url, params) {
         this.model_name = model_name;
         this.params = params || {};
@@ -137,7 +138,7 @@ export class ClaudeCLI {
     _run(args, prompt, label) {
         console.log(`Awaiting claude-cli response... (model: ${this.model_name || 'default'}, ${label})`);
         const env = { ...process.env };
-        if (this.params.thinking === false)
+        if (this.reasoning !== 'native')
             env.MAX_THINKING_TOKENS = '0'; // the CLI has no --no-thinking flag, only this env var
         return new Promise(resolve => {
             const child = spawn(this.command, args, { cwd: this.cwd, env });

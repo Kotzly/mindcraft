@@ -54,17 +54,41 @@ This fork adds a few things on top of upstream mindcraft: a backend that runs th
 `src/models/claude_cli.js` runs prompts through the `claude` CLI (`claude -p`) already logged into your Claude subscription, instead of an API key. Set it as a profile's model:
 
 ```json
-"model": "claude-cli/haiku"
+"model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}}
 ```
 
-Optional params (on the model config's `params`):
+Optional params (on the model config's `params`; a top-level profile `params` next to a string `model` is ignored):
 
 - `effort` - passed through as `--effort=<value>`.
-- `thinking: false` - disables extended thinking (sets `MAX_THINKING_TOKENS=0`).
 - `command` - the CLI executable to spawn (default `claude`).
 - `timeout_ms` - kill the CLI call after this long (default 180000).
 
 Each conversation/coding prompt keeps its own CLI session under `bots/_claude_cli`, resumed across calls with `--resume`; you can inspect one directly with `claude --resume <session id>` from that directory. `--resume` ignores mindcraft's own history trimming, so per-profile `max_messages`/`summary_chunk_size` (see `profiles/haiku.json`) bound how much real context the CLI session keeps.
+
+## Reasoning
+
+Every profile must declare `"reasoning"`, or the agent refuses to start:
+
+- `"native"` - the model's own extended thinking. Only for APIs that support it: `claude-cli` (otherwise it runs with `MAX_THINKING_TOKENS=0`) and `anthropic` (needs `thinking` in the model params, see `profiles/claude_thinker.json`).
+- `"tags"` - the conversing/coding prompts ask the model to reason inside `<think></think>`, which is stripped before the reply is used. For models without native thinking.
+- `"off"` - neither.
+
+A model config object can set its own, e.g. a local chat model with a claude-cli coder:
+
+```json
+"reasoning": "off",
+"model": "ollama/sweaterdog/andy-4:micro-q8_0",
+"code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}, "reasoning": "native"}
+```
+
+## Blocked commands
+
+A profile's `blocked_actions` list is added to the global `blocked_actions` in `settings.js`. Commands blocked this way are removed from the command docs in the prompt. Some are blocked automatically based on what the bot can use:
+
+- `!startConversation`, `!endConversation` when only one bot is running (bots added later from the UI don't give these back to earlier ones until they restart).
+- `!lookAtPlayer`, `!lookAtPosition` when `allow_vision` is off.
+
+`relevant_docs_count` (how many skill docs go into the coding prompt) can also be set per profile, like `num_examples`.
 
 ## Per-profile settings
 

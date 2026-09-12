@@ -1,5 +1,6 @@
 {
     "name": "claude_thinker",
+    "reasoning": "native",
 
     "model": {
         "model": "claude-sonnet-4-6",

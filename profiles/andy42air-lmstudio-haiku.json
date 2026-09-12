@@ -1,5 +1,6 @@
 {
     "name": "AndyAirLMS",
+    "reasoning": "off",
 
     "model": {
         "api": "lmstudio",
@@ -7,7 +8,7 @@
         "url": "http://0.0.0.0:7765/v1",
         "params": {"temperature": 0.6, "top_k": 20, "top_p": 0.95, "repeat_penalty": 1.0}
     },
-    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}},
+    "code_model": {"api": "claude-cli", "model": "haiku", "params": {"effort": "low"}, "reasoning": "native"},
     "embedding": "ollama",
 
     "settings": {"allow_vision": true}

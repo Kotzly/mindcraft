@@ -28,7 +28,8 @@ class AgentConnection {
         this.viewer_port = viewer_port;
     }
     setSettings(settings) {
-        this.settings = settings;
+        // num_agents is computed when the agent is created, not an editable setting
+        this.settings = { ...settings, num_agents: this.settings.num_agents };
     }
 }
 

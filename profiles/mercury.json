@@ -1,5 +1,6 @@
 {
     "name": "Mercury",
+    "reasoning": "off",
 
     "cooldown": 5000,
 

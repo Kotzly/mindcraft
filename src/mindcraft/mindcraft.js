@@ -2,6 +2,7 @@ import { createMindServer, registerAgent, numStateListeners } from './mindserver
 import { AgentProcess } from '../process/agent_process.js';
 import { getServer } from './mcserver.js';
 import open from 'open';
+import { validateProfileReasoning } from '../models/reasoning.js';
 
 let mindserver;
 let connected = false;
@@ -38,7 +39,18 @@ export async function createAgent(settings) {
             error: 'Agent name is required in profile'
         };
     }
+    const reasoning_error = validateProfileReasoning(settings.profile);
+    if (reasoning_error) {
+        console.error(reasoning_error);
+        return {
+            success: false,
+            error: reasoning_error
+        };
+    }
     settings = JSON.parse(JSON.stringify(settings));
+    // lets a lone bot drop the commands for talking to other bots; agents added later from the UI
+    // count the ones already running, but don't give the earlier ones those commands back until restart
+    settings.num_agents = Math.max(settings.profiles?.length || 1, Object.keys(agent_processes).length + 1);
     // a profile can override global settings for its own agent, e.g. "settings": {"allow_vision": true}
     Object.assign(settings, settings.profile.settings);
     let agent_name = settings.profile.name;
