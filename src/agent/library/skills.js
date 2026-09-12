@@ -9,6 +9,13 @@ const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_
 const useDelay = blockPlaceDelay > 0;
 
 export function log(bot, message) {
+    /**
+     * Append a message to the action output that the model will see.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} message, the message to log.
+     * @example
+     * skills.log(bot, "Placed 4 blocks.");
+     **/
     bot.output += message + '\n';
 }
 
