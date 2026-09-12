@@ -1344,8 +1344,11 @@ export async function getUnstuck(bot, attempts=3) {
     return moved;
 }
 
+// always submerged, but carry no waterlogged property
+const WATER_PLANTS = new Set(['seagrass', 'tall_seagrass', 'kelp', 'kelp_plant', 'bubble_column']);
+
 function isWaterBlock(block) {
-    return !!block && (block.name === 'water' || block.name === 'bubble_column' ||
+    return !!block && (block.name === 'water' || WATER_PLANTS.has(block.name) ||
         block.getProperties?.().waterlogged === true);
 }
 
