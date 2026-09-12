@@ -515,6 +515,14 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 success = true;
             }
             else {
+                // approach with the monitored goto first, the plugin's own goto has no watchdog and can loop forever
+                const reached = await goToGoal(bot, new pf.goals.GoalLookAtBlock(block.position, bot.world), { movements });
+                if (bot.interrupt_code) break;
+                if (!reached) {
+                    log(bot, `Could not reach ${block.name} at ${block.position}, skipping it.`);
+                    exclude = [...(exclude ?? []), block.position];
+                    continue;
+                }
                 await bot.collectBlock.collect(block);
                 success = true;
             }
@@ -1179,6 +1187,8 @@ async function gotoMonitored(bot, goal, options={}) {
 
     let dig_target = null;
     let dig_start = 0;
+    const dig_counts = new Map(); // block position -> times digging it started
+    const max_digs_per_block = 3;
 
     const progressCheck = setInterval(() => {
         const dig_block = bot.targetDigBlock;
@@ -1193,6 +1203,15 @@ async function gotoMonitored(bot, goal, options={}) {
                 }
             }
             if (!dig_target || !dig_target.position.equals(dig_block.position)) {
+                // the pathfinder can place a block and then dig it back out forever
+                const key = dig_block.position.toString();
+                const times = (dig_counts.get(key) ?? 0) + 1;
+                dig_counts.set(key, times);
+                if (times > max_digs_per_block) {
+                    bot.stopDigging();
+                    abort(`stuck placing and breaking ${dig_block.name}`);
+                    return;
+                }
                 dig_target = dig_block;
                 dig_start = Date.now();
             }

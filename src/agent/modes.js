@@ -168,10 +168,13 @@ const modes_list = [
             if (cur_dig_block && !this.prev_dig_block) {
                 this.prev_dig_block = cur_dig_block;
             }
+            // only digging a new spot is progress. compare by position, since every dig makes a new block
+            // object, and a pause between digs is not progress either, or a place/dig loop never counts as stuck
+            const digging_new_block = cur_dig_block && !cur_dig_block.position.equals(this.prev_dig_block.position);
             // a current pushes a swimming bot back and forth, so allow more drift before it counts as moving
             const in_water = skills.isInWater(bot);
             const distance = in_water ? this.water_distance : this.distance;
-            if (this.prev_location && this.prev_location.distanceTo(bot.entity.position) < distance && cur_dig_block == this.prev_dig_block) {
+            if (this.prev_location && this.prev_location.distanceTo(bot.entity.position) < distance && !digging_new_block) {
                 this.stuck_time += (Date.now() - this.last_time) / 1000;
             }
             else {

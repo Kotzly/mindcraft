@@ -1,8 +1,7 @@
 diff --git a/node_modules/mineflayer-pathfinder/index.js b/node_modules/mineflayer-pathfinder/index.js
-index b38bd30..2ca8205 100644
 --- a/node_modules/mineflayer-pathfinder/index.js
 +++ b/node_modules/mineflayer-pathfinder/index.js
-@@ -14,6 +14,7 @@ const interactableBlocks = require('./lib/interactable.json')
+@@ -14,6 +14,7 @@
  
  function inject (bot) {
    const waterType = bot.registry.blocksByName.water.id
@@ -10,7 +9,7 @@ index b38bd30..2ca8205 100644
    const ladderId = bot.registry.blocksByName.ladder.id
    const vineId = bot.registry.blocksByName.vine.id
    let stateMovements = new Movements(bot)
-@@ -61,6 +62,10 @@ function inject (bot) {
+@@ -61,6 +62,10 @@
    }
  
    bot.pathfinder.getPathTo = (movements, goal, timeout) => {
@@ -21,7 +20,7 @@ index b38bd30..2ca8205 100644
      const generator = bot.pathfinder.getPathFromTo(movements, bot.entity.position, goal, { timeout })
      const { value: { result, astarContext: context } } = generator.next()
      astarContext = context
-@@ -170,6 +175,16 @@ function inject (bot) {
+@@ -170,6 +175,16 @@
        const curPoint = path[i]
        if (curPoint.toBreak.length > 0 || curPoint.toPlace.length > 0) break
        const b = bot.blockAt(new Vec3(curPoint.x, curPoint.y, curPoint.z))
@@ -38,7 +37,7 @@ index b38bd30..2ca8205 100644
        if (b && (b.type === waterType || ((b.type === ladderId || b.type === vineId) && i + 1 < path.length && path[i + 1].y < curPoint.y))) {
          curPoint.x = Math.floor(curPoint.x) + 0.5
          curPoint.y = Math.floor(curPoint.y)
-@@ -524,6 +539,9 @@ function inject (bot) {
+@@ -524,6 +539,9 @@
          bot.activateBlock(bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z))).then(() => {
            lockUseBlock.release()
            placingBlock = nextPoint.toPlace.shift()
@@ -48,7 +47,18 @@ index b38bd30..2ca8205 100644
          }, err => {
            console.error(err)
            lockUseBlock.release()
-@@ -550,6 +568,7 @@ function inject (bot) {
+@@ -541,7 +559,9 @@
+       let canPlace = true
+       if (placingBlock.jump) {
+         bot.setControlState('jump', true)
+-        canPlace = placingBlock.y + 1 < bot.entity.position.y
++        // wait until the feet clear the block being placed (a jump peaks ~1.25 up): the server
++        // rejects placing into the player, and replanning from inside the new block digs it back out
++        canPlace = placingBlock.y + 2 <= bot.entity.position.y
+       }
+       if (canPlace) {
+         if (!lockEquipItem.tryAcquire()) return
+@@ -550,6 +570,7 @@
              lockEquipItem.release()
              const refBlock = bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z), false)
              if (!lockPlaceBlock.tryAcquire()) return
@@ -56,7 +66,7 @@ index b38bd30..2ca8205 100644
              if (interactableBlocks.includes(refBlock.name)) {
                bot.setControlState('sneak', true)
              }
-@@ -557,6 +576,7 @@ function inject (bot) {
+@@ -557,6 +578,7 @@
                .then(function () {
                  // Dont release Sneak if the block placement was not successful
                  bot.setControlState('sneak', false)
@@ -64,7 +74,7 @@ index b38bd30..2ca8205 100644
                  if (bot.pathfinder.LOSWhenPlacingBlocks && placingBlock.returnPos) returningPos = placingBlock.returnPos.clone()
                })
                .catch(_ignoreError => {
-@@ -576,7 +596,7 @@ function inject (bot) {
+@@ -576,7 +598,7 @@
      let dx = nextPoint.x - p.x
      const dy = nextPoint.y - p.y
      let dz = nextPoint.z - p.z
@@ -73,7 +83,7 @@ index b38bd30..2ca8205 100644
        // arrived at next point
        lastNodeTime = performance.now()
        if (stopPathing) {
-@@ -611,6 +631,9 @@ function inject (bot) {
+@@ -611,6 +633,9 @@
      if (bot.entity.isInWater) {
        bot.setControlState('jump', true)
        bot.setControlState('sprint', false)
@@ -84,10 +94,9 @@ index b38bd30..2ca8205 100644
        bot.setControlState('jump', false)
        bot.setControlState('sprint', true)
 diff --git a/node_modules/mineflayer-pathfinder/lib/movements.js b/node_modules/mineflayer-pathfinder/lib/movements.js
-index a7e3505..84a0841 100644
 --- a/node_modules/mineflayer-pathfinder/lib/movements.js
 +++ b/node_modules/mineflayer-pathfinder/lib/movements.js
-@@ -50,7 +50,12 @@ class Movements {
+@@ -50,7 +50,12 @@
      this.blocksToAvoid.add(registry.blocksByName.fire.id)
      if (registry.blocksByName.cobweb) this.blocksToAvoid.add(registry.blocksByName.cobweb.id)
      if (registry.blocksByName.web) this.blocksToAvoid.add(registry.blocksByName.web.id)
@@ -101,7 +110,7 @@ index a7e3505..84a0841 100644
  
      this.liquids = new Set()
      this.liquids.add(registry.blocksByName.water.id)
-@@ -62,7 +67,13 @@ class Movements {
+@@ -62,7 +67,13 @@
  
      this.climbables = new Set()
      this.climbables.add(registry.blocksByName.ladder.id)
@@ -116,7 +125,7 @@ index a7e3505..84a0841 100644
      this.emptyBlocks = new Set()
  
      this.replaceables = new Set()
-@@ -92,13 +103,15 @@ class Movements {
+@@ -92,13 +103,15 @@
        }
      })
      registry.blocksArray.forEach(block => {
@@ -134,7 +143,7 @@ index a7e3505..84a0841 100644
  
      this.exclusionAreasStep = []
      this.exclusionAreasBreak = []
-@@ -230,8 +243,13 @@ class Movements {
+@@ -230,8 +243,13 @@
        }
      }
      b.climbable = this.climbables.has(b.type)
@@ -150,7 +159,7 @@ index a7e3505..84a0841 100644
      b.replaceable = this.replaceables.has(b.type) && !b.physical
      b.liquid = this.liquids.has(b.type)
      b.height = pos.y + dy
-@@ -284,6 +302,18 @@ class Movements {
+@@ -284,6 +302,18 @@
      cost += this.exclusionStep(block) // Is excluded so can't move or break
      cost += this.getNumEntitiesAt(block.position, 0, 0, 0) * this.entityCost
      if (block.safe) return cost
@@ -169,7 +178,7 @@ index a7e3505..84a0841 100644
      if (!this.safeToBreak(block)) return 100 // Can't break, so can't move
      toBreak.push(block.position)
  
-@@ -387,8 +417,8 @@ class Movements {
+@@ -387,8 +417,8 @@
      cost += this.safeOrBreak(blockB, toBreak)
      if (cost > 100) return
  
@@ -180,7 +189,7 @@ index a7e3505..84a0841 100644
        toPlace.push({ x: node.x + dir.x, y: node.y, z: node.z + dir.z, dx: 0, dy: 0, dz: 0, useOne: true }) // Indicate that a block should be used on this block not placed
      } else {
        cost += this.safeOrBreak(blockC, toBreak)
-@@ -554,6 +584,54 @@ class Movements {
+@@ -554,6 +584,54 @@
      neighbors.push(new Move(node.x, node.y + 1, node.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
    }
  
@@ -235,7 +244,7 @@ index a7e3505..84a0841 100644
    // Jump up, down or forward over a 1 block gap
    getMoveParkourForward (node, dir, neighbors) {
      const block0 = this.getBlock(node, 0, -1, 0)
-@@ -656,8 +734,27 @@ class Movements {
+@@ -656,8 +734,27 @@
      this.getMoveDown(node, neighbors)
      this.getMoveUp(node, neighbors)
  
